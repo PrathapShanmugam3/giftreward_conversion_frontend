@@ -3,7 +3,6 @@ import { usePublisherAuth, useAdminAuth } from './context/AuthContext';
 import ProtectedRoute from './routes/ProtectedRoute';
 import PublisherLayout from './layouts/PublisherLayout';
 import AdminLayout from './layouts/AdminLayout';
-import PlaceholderPage from './components/PlaceholderPage';
 
 import Landing from './pages/public/Landing';
 import PublisherLogin from './pages/publisher/Login';
@@ -37,6 +36,10 @@ import PublisherConversions from './pages/publisher/Conversions';
 import PublisherPostback from './pages/publisher/Postback';
 import PublisherProfile from './pages/publisher/Profile';
 import OfferDetail from './pages/publisher/OfferDetail';
+import PublisherApiDocumentation from './pages/publisher/ApiDocumentation';
+import PublisherSupport from './pages/publisher/Support';
+import AdminPostbackTools from './pages/admin/PostbackTools';
+import CustomEmailSender from './pages/admin/CustomEmailSender';
 
 function PublisherProtected() {
   return <ProtectedRoute useAuth={usePublisherAuth} loginPath="/publisher/login" />;
@@ -73,6 +76,8 @@ export default function App() {
           <Route path="wallet/withdrawals/:id/invoice" element={<PublisherInvoice />} />
           <Route path="postback" element={<PublisherPostback />} />
           <Route path="profile" element={<PublisherProfile />} />
+          <Route path="api-documentation" element={<PublisherApiDocumentation />} />
+          <Route path="support" element={<PublisherSupport />} />
         </Route>
       </Route>
 
@@ -90,6 +95,8 @@ export default function App() {
           <Route path="reports" element={<AdminReports />} />
           <Route path="withdrawals" element={<AdminWithdrawals />} />
           <Route path="postbacks" element={<AdminPostbacks />} />
+          <Route path="postback-tools" element={<AdminPostbackTools />} />
+          <Route path="custom-email" element={<CustomEmailSender />} />
           <Route path="ip-whitelist" element={<AdminIpWhitelist />} />
           <Route path="gateways" element={<PaymentGateways />} />
           <Route path="settings" element={<AdminSettings />} />

@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAdminAuth } from '../context/AuthContext';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 // Mirrors the legacy sadmin/includes/sidebar.php grouping: Dashboard,
 // a collapsible "Offers" group (All Offers + Requested Offers), Publishers,
@@ -26,9 +27,15 @@ const groups = [
   },
 ];
 
-const afterOffers = [
-  { to: '/admin/publishers', label: 'Publishers', icon: 'publishers' },
-];
+const publishersGroup = {
+  key: 'publishers',
+  label: 'Publishers',
+  icon: 'publishers',
+  items: [
+    { to: '/admin/publishers', label: 'All Publishers' },
+    { to: '/admin/custom-email', label: 'Send Custom Email' },
+  ],
+};
 
 const reportGroup = {
   key: 'reports',
@@ -47,15 +54,18 @@ const afterReports = [
 ];
 
 // Legacy has 4 sub-items here (Postback Logs / User Postbacks / Postback
-// Fire / Postback Link); only the first two have a React page, and both
-// live together as tabs inside the one /admin/postbacks page built in
-// Phase 7 — "Postback Fire" and "Postback Link" have no React equivalent
-// yet and are correctly omitted rather than linking to a nonexistent route.
+// Fire / Postback Link). Logs & approvals live together as tabs inside
+// /admin/postbacks (Phase 7); Postback Fire + Postback Link (the token/URL
+// display) now live together as tabs inside /admin/postback-tools — see
+// PostbackTools.jsx.
 const postbackGroup = {
   key: 'postbacks',
   label: 'Postbacks',
   icon: 'postbacks',
-  items: [{ to: '/admin/postbacks', label: 'Postback Logs & Approvals' }],
+  items: [
+    { to: '/admin/postbacks', label: 'Postback Logs & Approvals' },
+    { to: '/admin/postback-tools', label: 'Postback URL & Fire' },
+  ],
 };
 
 const settingsGroup = {
@@ -152,6 +162,7 @@ function NavGroup({ group, openKey, setOpenKey }) {
 export default function AdminLayout() {
   const { user, logout } = useAdminAuth();
   const [openKey, setOpenKey] = useState('offers');
+  const location = useLocation();
 
   return (
     <div className="admin-theme flex min-h-screen bg-[#f5f7fb]">
@@ -172,12 +183,7 @@ export default function AdminLayout() {
             <NavGroup key={group.key} group={group} openKey={openKey} setOpenKey={setOpenKey} />
           ))}
 
-          {afterOffers.map((item) => (
-            <NavLink key={item.to} to={item.to} className={navLinkClass}>
-              {ICONS[item.icon]}
-              {item.label}
-            </NavLink>
-          ))}
+          <NavGroup group={publishersGroup} openKey={openKey} setOpenKey={setOpenKey} />
 
           <NavGroup group={reportGroup} openKey={openKey} setOpenKey={setOpenKey} />
 
@@ -207,7 +213,9 @@ export default function AdminLayout() {
           </div>
         </header>
         <main className="admin-theme p-6">
-          <Outlet />
+          <ErrorBoundary key={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { usePublisherAuth } from '../context/AuthContext';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 // Mirrors public_html/publisher/sidebar.php: Dashboard, Offers, a
 // collapsible "Reports" group (Daily/Monthly/Custom + Conversions),
@@ -36,6 +37,8 @@ const settingsGroup = {
   items: [
     { to: '/publisher/profile', label: 'Profile' },
     { to: '/publisher/postback', label: 'Postback' },
+    { to: '/publisher/api-documentation', label: 'API Documentation' },
+    { to: '/publisher/support', label: 'Support' },
   ],
 };
 
@@ -116,6 +119,7 @@ function NavGroup({ group, openKey, setOpenKey }) {
 export default function PublisherLayout() {
   const { user, logout } = usePublisherAuth();
   const [openKey, setOpenKey] = useState(null);
+  const location = useLocation();
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -156,7 +160,9 @@ export default function PublisherLayout() {
           </div>
         </header>
         <main className="p-6">
-          <Outlet />
+          <ErrorBoundary key={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>

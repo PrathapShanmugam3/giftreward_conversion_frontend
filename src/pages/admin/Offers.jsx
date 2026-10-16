@@ -32,7 +32,9 @@ export default function AdminOffers() {
       await apiClient.post('/admin/offers', payload);
     }
     setModalOffer(undefined);
-    await load(pagination.page);
+    // Save already succeeded at this point — don't let a reload failure
+    // surface as a save error inside the (now-closing) modal.
+    load(pagination.page).catch((err) => console.error('Failed to refresh offers list', err));
   }
 
   async function handleDelete(offer) {
