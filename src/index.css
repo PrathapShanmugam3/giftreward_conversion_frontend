@@ -1,0 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+/*
+ * Admin design tokens — lifted from public_html/assets/css/admin.css so the
+ * React admin panel can match the legacy sadmin/*.php look via Tailwind's
+ * CSS-first @theme config (v4). Referenced as e.g. bg-admin-primary,
+ * text-admin-danger, shadow-admin-card, rounded-admin.
+ */
+@theme {
+  --color-admin-primary: #4361ee;
+  --color-admin-primary-dark: #3a56d4;
+  --color-admin-secondary: #3f37c9;
+  --color-admin-success: #4cc9f0;
+  --color-admin-info: #4895ef;
+  --color-admin-warning: #f8961e;
+  --color-admin-danger: #f72585;
+  --color-admin-light: #f8f9fa;
+  --color-admin-dark: #212529;
+  --color-admin-gray: #6c757d;
+  --color-admin-gray-light: #e9ecef;
+  --color-admin-bg: #f5f7fb;
+
+  --radius-admin: 10px;
+
+  --shadow-admin-card: 0 4px 6px rgba(0, 0, 0, 0.05);
+  --shadow-admin-card-hover: 0 10px 15px rgba(0, 0, 0, 0.1);
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Admin panel pages use Inter per admin.css's design system */
+.admin-theme {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: #f5f7fb;
+}
+
+/*
+ * Animated glow border — mirrors o/index.php's .glow-border treatment on
+ * the cashback offer card (public_html/o/index.php's inline <style> block).
+ * Used by CampaignLanding/Referral to tighten the match with the legacy
+ * campaign landing page.
+ */
+.campaign-glow-border {
+  z-index: 1;
+}
+
+.campaign-glow-border::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, #3b82f6, #60a5fa, #93c5fd, #bfdbfe, #93c5fd, #60a5fa, #3b82f6);
+  background-size: 400%;
+  border-radius: 18px;
+  z-index: -1;
+  animation: campaign-border-glow 15s linear infinite;
+  filter: blur(2px);
+  opacity: 0.8;
+}
+
+@keyframes campaign-border-glow {
+  0% { background-position: 0 0; }
+  50% { background-position: 400% 0; }
+  100% { background-position: 0 0; }
+}
