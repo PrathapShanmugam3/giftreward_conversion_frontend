@@ -3,11 +3,11 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://giftreward-backend.vercel.app/api/:path*" },
-    { "source": "/go/:path*", "destination": "https://giftreward-backend.vercel.app/go/:path*" },
-    { "source": "/postback/:path*", "destination": "https://giftreward-backend.vercel.app/postback/:path*" },
-    { "source": "/report/:path*", "destination": "https://giftreward-backend.vercel.app/report/:path*" },
-    { "source": "/tracking/:path*", "destination": "https://giftreward-backend.vercel.app/tracking/:path*" },
+    { "source": "/api/:path*", "destination": "https://giftreward-conversion-backend.vercel.app/api/:path*" },
+    { "source": "/go/:path*", "destination": "https://giftreward-conversion-backend.vercel.app/go/:path*" },
+    { "source": "/postback/:path*", "destination": "https://giftreward-conversion-backend.vercel.app/postback/:path*" },
+    { "source": "/report/:path*", "destination": "https://giftreward-conversion-backend.vercel.app/report/:path*" },
+    { "source": "/tracking/:path*", "destination": "https://giftreward-conversion-backend.vercel.app/tracking/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
