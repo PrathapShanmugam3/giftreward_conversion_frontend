@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
+import Loader from '../../components/Loader';
 
 const STATUS_BADGE = {
   approved: 'bg-green-100 text-green-700',
@@ -97,7 +98,7 @@ export default function PublisherOffers() {
       {notice && <p className="mb-4 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700">{notice}</p>}
 
       {loading ? (
-        <p className="text-sm text-gray-500">Loading...</p>
+        <Loader />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {offers.map((offer) => (

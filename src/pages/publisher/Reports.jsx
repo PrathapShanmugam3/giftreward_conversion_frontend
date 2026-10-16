@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
+import Loader from '../../components/Loader';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -104,7 +105,7 @@ export default function PublisherReports() {
         </div>
       </form>
 
-      {loading && <p className="text-sm text-gray-500">Loading...</p>}
+      {loading && <Loader />}
 
       {!loading && summary && (
         <div className="mb-6 grid grid-cols-3 gap-3">

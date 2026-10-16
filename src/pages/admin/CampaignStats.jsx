@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
+import Loader from '../../components/Loader';
 
 const monthStart = () => {
   const d = new Date();
@@ -55,7 +56,7 @@ export default function AdminCampaignStats() {
       </form>
 
       {loading ? (
-        <p className="text-sm text-gray-500">Loading...</p>
+        <Loader />
       ) : (
         <div className="overflow-x-auto rounded-admin bg-white shadow-admin-card">
           <table className="min-w-full divide-y divide-gray-200 text-sm">

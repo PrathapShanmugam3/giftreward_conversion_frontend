@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
+import Loader from '../../components/Loader';
 
 // File uploads for banner/favicon aren't implemented yet — accepted as
 // plain URL/path strings for now (see siteSettings.service.js note).
@@ -47,7 +48,7 @@ export default function AdminSettings() {
     }
   }
 
-  if (!form) return <p className="text-sm text-gray-500">Loading...</p>;
+  if (!form) return <Loader />;
 
   return (
     <div className="admin-theme">

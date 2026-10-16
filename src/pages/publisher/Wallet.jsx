@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
+import Loader from '../../components/Loader';
 
 const STATUS_BADGE = {
   pending: 'bg-yellow-100 text-yellow-700',
@@ -40,7 +41,7 @@ export default function PublisherWallet() {
     }
   }
 
-  if (!overview) return <p className="text-sm text-gray-500">Loading...</p>;
+  if (!overview) return <Loader />;
 
   return (
     <div>

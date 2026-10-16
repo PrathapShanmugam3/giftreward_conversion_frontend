@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { apiClient } from '../../api/client';
+import Loader from '../../components/Loader';
 
 // Mirrors publisher/offer.php: single-offer drill-in with tracking link,
 // event payouts, and a request-access button when not yet approved.
@@ -34,7 +35,7 @@ export default function OfferDetail() {
     }
   }
 
-  if (!offer) return <p className="text-sm text-gray-500">Loading...</p>;
+  if (!offer) return <Loader />;
 
   const trackingLink = `${window.location.origin}/go?cid=${offer.id}&uid=`;
 

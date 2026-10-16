@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
+import Loader from '../../components/Loader';
 
 // Mirrors sadmin/index.php: network totals, today's figures, 6-month trend,
 // recent conversions, top offers by revenue.
@@ -10,7 +11,7 @@ export default function AdminDashboard() {
     apiClient.get('/admin/dashboard').then(({ data: res }) => setData(res));
   }, []);
 
-  if (!data) return <p className="text-sm text-gray-500">Loading...</p>;
+  if (!data) return <Loader />;
 
   return (
     <div className="admin-theme">

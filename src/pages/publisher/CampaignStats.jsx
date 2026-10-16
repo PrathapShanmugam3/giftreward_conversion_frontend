@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { apiClient } from '../../api/client';
+import Loader from '../../components/Loader';
 
 export default function CampaignStats() {
   const { id } = useParams();
@@ -10,7 +11,7 @@ export default function CampaignStats() {
     apiClient.get(`/publisher/campaigns/${id}/stats`).then(({ data }) => setStats(data));
   }, [id]);
 
-  if (!stats) return <p className="text-sm text-gray-500">Loading...</p>;
+  if (!stats) return <Loader />;
 
   const { campaign, totals, recentConversions } = stats;
 

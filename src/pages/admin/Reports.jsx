@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
+import Loader from '../../components/Loader';
 
 const monthStart = () => {
   const d = new Date();
@@ -88,7 +89,7 @@ export default function AdminReports() {
         </div>
       </form>
 
-      {loading && <p className="text-sm text-gray-500">Loading...</p>}
+      {loading && <Loader />}
 
       {!loading && data && (
         <>

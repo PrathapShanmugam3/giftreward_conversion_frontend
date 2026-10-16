@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
+import Loader from '../../components/Loader';
 
 export default function PublisherProfile() {
   const [form, setForm] = useState(null);
@@ -44,7 +45,7 @@ export default function PublisherProfile() {
     }
   }
 
-  if (!form) return <p className="text-sm text-gray-500">Loading...</p>;
+  if (!form) return <Loader />;
 
   return (
     <div>

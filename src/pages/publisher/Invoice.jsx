@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { apiClient } from '../../api/client';
+import Loader from '../../components/Loader';
 
 export default function Invoice() {
   const { id } = useParams();
@@ -10,7 +11,7 @@ export default function Invoice() {
     apiClient.get(`/publisher/wallet/withdrawals/${id}/invoice`).then(({ data }) => setInvoice(data));
   }, [id]);
 
-  if (!invoice) return <p className="text-sm text-gray-500">Loading...</p>;
+  if (!invoice) return <Loader />;
 
   const { withdrawal, user } = invoice;
 

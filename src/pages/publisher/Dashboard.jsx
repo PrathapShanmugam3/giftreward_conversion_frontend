@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../../api/client';
+import Loader from '../../components/Loader';
 
 const PERIODS = [
   { value: 'today', label: 'Today' },
@@ -41,7 +42,7 @@ export default function PublisherDashboard() {
       </div>
 
       {loading || !data ? (
-        <p className="text-sm text-gray-500">Loading...</p>
+        <Loader />
       ) : (
         <>
           <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
