@@ -1,26 +1,39 @@
 import { useEffect, useState } from 'react';
+import { BarChart3, Gift, Pause, Pencil, Play, Plus, Rocket, Share2, Trash2, Users } from 'lucide-react';
 import { apiClient } from '../../api/client';
+import { usePageTitle } from '../../context/SiteContext';
 import CampaignFormModal from '../../components/CampaignFormModal';
+import OfferThumb from '../../components/OfferThumb';
+import { Alert, Button, Card, CopyField, EmptyState, PageHeader, Skeleton, StatusBadge, useConfirm, useToast } from '../../components/ui';
+import { errorMessage, formatCurrency, formatDate } from '../../utils/format';
 
+function cashbackTotals(campaign) {
+  try {
+    const config = JSON.parse(campaign.eventConfig || '{}');
+    return Object.values(config).reduce(
+      (acc, e) => ({ user: acc.user + Number(e.user_cashback || 0), referral: acc.referral + Number(e.referral_cashback || 0) }),
+      { user: 0, referral: 0 }
+    );
+  } catch {
+    return { user: 0, referral: 0 };
+  }
+}
+
+// publisher/create-camp.php + edit-campaign / toggle / delete: cashback
+// campaigns built on an offer, each with a public landing link (/o) and an
+// optional referral link (/refer).
 export default function PublisherCampaigns() {
-  const [campaigns, setCampaigns] = useState([]);
+  usePageTitle('Campaigns');
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [campaigns, setCampaigns] = useState(null);
   const [offers, setOffers] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [modalCampaign, setModalCampaign] = useState(undefined);
-  const [copiedId, setCopiedId] = useState(null);
 
   async function load() {
-    setLoading(true);
-    try {
-      const [campaignsRes, offersRes] = await Promise.all([
-        apiClient.get('/publisher/campaigns'),
-        apiClient.get('/publisher/offers'),
-      ]);
-      setCampaigns(campaignsRes.data.campaigns);
-      setOffers(offersRes.data.offers.filter((o) => o.canAccess));
-    } finally {
-      setLoading(false);
-    }
+    const [campaignsRes, offersRes] = await Promise.all([apiClient.get('/publisher/campaigns'), apiClient.get('/publisher/offers')]);
+    setCampaigns(campaignsRes.data.campaigns);
+    setOffers(offersRes.data.offers.filter((o) => o.canAccess));
   }
 
   useEffect(() => {
@@ -28,93 +41,141 @@ export default function PublisherCampaigns() {
   }, []);
 
   async function handleSubmit(payload) {
-    if (modalCampaign) {
-      await apiClient.put(`/publisher/campaigns/${modalCampaign.id}`, payload);
-    } else {
-      await apiClient.post('/publisher/campaigns', payload);
-    }
+    if (modalCampaign) await apiClient.put(`/publisher/campaigns/${modalCampaign.id}`, payload);
+    else await apiClient.post('/publisher/campaigns', payload);
+    toast.success(modalCampaign ? 'Campaign updated' : 'Campaign created — your links are ready');
     setModalCampaign(undefined);
     await load();
   }
 
   async function toggleStatus(campaign) {
     const next = campaign.status === 'active' ? 'paused' : 'active';
-    await apiClient.post(`/publisher/campaigns/${campaign.id}/status`, { status: next });
-    await load();
+    try {
+      await apiClient.post(`/publisher/campaigns/${campaign.id}/status`, { status: next });
+      toast.success(`Campaign ${next === 'active' ? 'activated' : 'paused'}`);
+      await load();
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
   }
 
   async function handleDelete(campaign) {
-    if (!confirm('Delete this campaign?')) return;
-    await apiClient.delete(`/publisher/campaigns/${campaign.id}`);
-    await load();
-  }
-
-  function copyLink(link, id) {
-    navigator.clipboard?.writeText(link);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 1500);
+    const ok = await confirm({ title: 'Delete campaign?', message: `The landing and referral links for "${campaign.Offer?.name}" will stop being listed here.`, confirmLabel: 'Delete campaign' });
+    if (!ok) return;
+    try {
+      await apiClient.delete(`/publisher/campaigns/${campaign.id}`);
+      toast.success('Campaign deleted');
+      await load();
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
   }
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-gray-800">Campaigns</h1>
-        <button
-          type="button"
-          onClick={() => setModalCampaign(null)}
-          disabled={offers.length === 0}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-        >
-          + New Campaign
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Monetize"
+        title="Cashback campaigns"
+        subtitle="Wrap an offer in a branded landing page that collects name, mobile and UPI — then share cashback with your users."
+        actions={
+          <Button icon={Plus} onClick={() => setModalCampaign(null)} disabled={offers.length === 0}>
+            New campaign
+          </Button>
+        }
+      />
 
-      {!loading && offers.length === 0 && (
-        <p className="mb-4 rounded-md bg-yellow-50 px-3 py-2 text-sm text-yellow-700">
-          You need access to at least one offer before creating a campaign.
-        </p>
+      {campaigns && offers.length === 0 && (
+        <Alert tone="warning" className="mb-6">
+          You need access to at least one offer before you can create a campaign. Request one from the offer marketplace.
+        </Alert>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        {campaigns.map((c) => (
-          <div key={c.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <div className="mb-2 flex items-start justify-between">
-              <h2 className="font-semibold text-gray-800">{c.Offer?.name}</h2>
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                  c.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                }`}
-              >
-                {c.status}
-              </span>
-            </div>
-            <div className="mb-3 space-y-1 text-xs text-gray-500">
-              <div className="flex items-center gap-2">
-                <span className="truncate">{c.campaignLink}</span>
-                <button onClick={() => copyLink(c.campaignLink, c.id)} className="shrink-0 font-medium text-blue-600">
-                  {copiedId === c.id ? 'Copied!' : 'Copy'}
-                </button>
-              </div>
-              {!!c.referralEnabled && <div className="truncate text-gray-400">{c.referralLink}</div>}
-            </div>
-            <div className="flex gap-3 text-sm">
-              <button onClick={() => setModalCampaign(c)} className="font-medium text-blue-600">
-                Edit
-              </button>
-              <button onClick={() => toggleStatus(c)} className="font-medium text-gray-600">
-                {c.status === 'active' ? 'Pause' : 'Activate'}
-              </button>
-              <a href={`/publisher/campaigns/${c.id}/stats`} className="font-medium text-gray-600">
-                Stats
-              </a>
-              <button onClick={() => handleDelete(c)} className="font-medium text-red-600">
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
-        {!loading && campaigns.length === 0 && <p className="text-sm text-gray-500">No campaigns yet.</p>}
-      </div>
+      {!campaigns ? (
+        <div className="grid gap-5 lg:grid-cols-2">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-72 rounded-2xl" />
+          ))}
+        </div>
+      ) : campaigns.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={Rocket}
+            title="No campaigns yet"
+            description="Create your first cashback campaign to get a shareable landing page."
+            action={
+              offers.length > 0 && (
+                <Button icon={Plus} onClick={() => setModalCampaign(null)}>
+                  Create campaign
+                </Button>
+              )
+            }
+          />
+        </Card>
+      ) : (
+        <div className="grid gap-5 lg:grid-cols-2">
+          {campaigns.map((c) => {
+            const totals = cashbackTotals(c);
+            return (
+              <Card key={c.id} hover className="flex flex-col">
+                <div className="flex items-start gap-4 p-5">
+                  <OfferThumb offer={c.Offer || { name: '?' }} size="lg" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="truncate text-base font-extrabold tracking-tight text-ink-900">{c.Offer?.name}</h2>
+                      <StatusBadge status={c.status} />
+                    </div>
+                    <p className="mt-0.5 font-mono text-xs text-ink-400">ID {c.campaignId}</p>
+                    <p className="mt-0.5 text-xs text-ink-500">Created {formatDate(c.createdAt)}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 px-5">
+                  <div className="rounded-2xl bg-emerald-50 px-4 py-3 ring-1 ring-emerald-100">
+                    <p className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
+                      <Gift className="h-3.5 w-3.5" /> User cashback
+                    </p>
+                    <p className="mt-0.5 text-lg font-extrabold text-emerald-800 tabular-nums">{formatCurrency(totals.user)}</p>
+                  </div>
+                  <div className="rounded-2xl bg-violet-50 px-4 py-3 ring-1 ring-violet-100">
+                    <p className="flex items-center gap-1.5 text-[11px] font-semibold text-violet-700">
+                      <Users className="h-3.5 w-3.5" /> Referral cashback
+                    </p>
+                    <p className="mt-0.5 text-lg font-extrabold text-violet-800 tabular-nums">{c.referralEnabled ? formatCurrency(totals.referral) : 'Off'}</p>
+                  </div>
+                </div>
+                <div className="space-y-3 p-5">
+                  <div>
+                    <p className="mb-1.5 text-[11px] font-bold tracking-wider text-ink-400 uppercase">Landing page</p>
+                    <CopyField value={c.campaignLink} />
+                  </div>
+                  {!!c.referralEnabled && (
+                    <div>
+                      <p className="mb-1.5 text-[11px] font-bold tracking-wider text-ink-400 uppercase">Referral page</p>
+                      <CopyField value={c.referralLink} />
+                    </div>
+                  )}
+                </div>
+                <div className="mt-auto flex flex-wrap items-center gap-1 border-t border-line px-3 py-2.5">
+                  <Button size="sm" variant="ghost" icon={BarChart3} to={`/publisher/campaigns/${c.id}/stats`}>
+                    Stats
+                  </Button>
+                  <Button size="sm" variant="ghost" icon={Pencil} onClick={() => setModalCampaign(c)}>
+                    Edit
+                  </Button>
+                  <Button size="sm" variant="ghost" icon={c.status === 'active' ? Pause : Play} onClick={() => toggleStatus(c)}>
+                    {c.status === 'active' ? 'Pause' : 'Activate'}
+                  </Button>
+                  <Button size="sm" variant="ghost" icon={Share2} href={`https://wa.me/?text=${encodeURIComponent(c.campaignLink)}`} target="_blank" rel="noreferrer">
+                    Share
+                  </Button>
+                  <Button size="sm" variant="ghost" className="ml-auto hover:text-rose-600" icon={Trash2} onClick={() => handleDelete(c)}>
+                    Delete
+                  </Button>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {modalCampaign !== undefined && (
         <CampaignFormModal campaign={modalCampaign} offers={offers} onClose={() => setModalCampaign(undefined)} onSubmit={handleSubmit} />

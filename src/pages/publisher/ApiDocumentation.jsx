@@ -1,150 +1,174 @@
 import { useEffect, useState } from 'react';
-import { Copy } from 'lucide-react';
+import { BookOpen, KeyRound, ShieldAlert, Terminal } from 'lucide-react';
 import { apiClient } from '../../api/client';
-import Loader from '../../components/Loader';
+import { usePageTitle } from '../../context/SiteContext';
+import { Alert, Badge, Card, CardHeader, CopyButton, CopyField, PageHeader, PageSkeleton, Segmented, Table, Td, Th, THead, Tr } from '../../components/ui';
 
-// Mirrors publisher/api-documentation.php: the publisher's own API key
-// (users.auth_token) plus usage docs for GET /report (replaces the legacy
-// api.php — see CUTOVER.md's URL-rename note).
+const REPORTS = [
+  ['1', 'Today'],
+  ['2', 'Yesterday'],
+  ['3', 'Last 7 days'],
+  ['4', 'Last 30 days'],
+  ['5', 'This month'],
+];
+
+function CodeBlock({ code, label }) {
+  return (
+    <div className="overflow-hidden rounded-2xl bg-[#0b1020] ring-1 ring-white/5">
+      <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-2">
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-rose-400/80" />
+          <span className="h-2.5 w-2.5 rounded-full bg-amber-400/80" />
+          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/80" />
+          {label && <span className="ml-2 text-[11px] font-semibold text-slate-500">{label}</span>}
+        </div>
+        <CopyButton text={code} className="bg-white/10 text-slate-200 ring-white/10 hover:bg-white/15" />
+      </div>
+      <pre className="scroll-thin overflow-x-auto p-4 font-mono text-[12.5px] leading-relaxed text-slate-200">{code}</pre>
+    </div>
+  );
+}
+
+// publisher/api-documentation.php: the publisher's API key (users.auth_token)
+// and usage of GET /report (the endpoint that replaced the legacy api.php).
 export default function PublisherApiDocumentation() {
+  usePageTitle('API documentation');
   const [info, setInfo] = useState(null);
-  const [copied, setCopied] = useState(false);
+  const [lang, setLang] = useState('curl');
 
   useEffect(() => {
     apiClient.get('/publisher/api-info').then(({ data }) => setInfo(data));
   }, []);
 
-  if (!info) return <Loader />;
+  if (!info) return <PageSkeleton />;
 
-  function handleCopy() {
-    navigator.clipboard.writeText(info.authToken);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
+  const url = `${info.reportUrl}?auth-token=YOUR_API_KEY&report=3`;
+  const samples = {
+    curl: `curl -X GET "${url}"`,
+    python: `import requests
 
-  const exampleUrl = `${info.reportUrl}?auth-token=${info.authToken}&report=3`;
+response = requests.get("${info.reportUrl}", params={
+    "auth-token": "YOUR_API_KEY",
+    "report": 3,  # last 7 days
+})
+data = response.json()
+if data["success"]:
+    for conversion in data["data"]:
+        print(conversion["clickid"], conversion["payout"])`,
+    node: `const res = await fetch("${url}");
+const data = await res.json();
+if (data.success) {
+  for (const c of data.data) console.log(c.clickid, c.payout);
+}`,
+    php: `<?php
+$res = file_get_contents("${url}");
+$data = json_decode($res, true);
+if ($data["success"]) {
+    foreach ($data["data"] as $c) echo $c["clickid"] . " " . $c["payout"] . PHP_EOL;
+}`,
+  };
 
   return (
-    <div className="mx-auto max-w-4xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">API Documentation</h1>
-        <p className="text-gray-600">Access your conversion data programmatically using our API</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader eyebrow="Developers" title="Reporting API" subtitle="Pull your conversions into your own dashboards, sheets or tracking stack." />
 
-      <div className="mb-6 rounded-lg bg-white p-6 shadow-md">
-        <h2 className="mb-4 text-xl font-bold text-gray-800">Your API Authentication</h2>
-        <label className="mb-2 block text-sm font-medium text-gray-900">Your API Key</label>
-        <div className="flex">
-          <input
-            readOnly
-            value={info.authToken}
-            className="block w-full rounded-l-lg border border-gray-300 bg-gray-50 p-2.5 font-mono text-sm text-gray-900"
-          />
-          <button
-            onClick={handleCopy}
-            className="flex items-center gap-1.5 rounded-r-lg bg-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-800"
-          >
-            <Copy className="h-4 w-4" />
-            {copied ? 'Copied!' : ''}
-          </button>
+      <Card>
+        <CardHeader title="Your API key" subtitle="Authenticates every request — treat it like a password." icon={KeyRound} />
+        <div className="space-y-4 p-5">
+          <CopyField value={info.authToken} />
+          <Alert tone="warning">Never share this key or put it in client-side code. Anyone with it can read your conversion data.</Alert>
         </div>
-        <p className="mt-2 text-sm text-gray-500">Keep this token secure. Do not share it with anyone.</p>
-      </div>
+      </Card>
 
-      <div className="mb-6 rounded-lg bg-white p-6 shadow-md">
-        <h2 className="mb-4 text-xl font-bold text-gray-800">API Endpoints</h2>
+      <div className="grid gap-6 xl:grid-cols-5">
+        <Card className="xl:col-span-3">
+          <CardHeader title="Conversion report" icon={BookOpen} actions={<Badge tone="success">GET</Badge>} />
+          <div className="space-y-6 p-5">
+            <CodeBlock label="Endpoint" code={`GET ${info.reportUrl}?auth-token={API_KEY}&report={1-5}`} />
 
-        <h3 className="mb-2 text-lg font-semibold">Conversion Reports</h3>
-        <div className="mb-4 overflow-x-auto rounded-lg bg-gray-800 p-4 text-gray-100">
-          <code className="text-sm">
-            GET {info.reportUrl}?auth-token=YOUR_AUTH_TOKEN&report=TIME_PERIOD
-          </code>
-        </div>
+            <div>
+              <h3 className="mb-3 text-sm font-bold text-ink-900">Query parameters</h3>
+              <div className="overflow-hidden rounded-2xl ring-1 ring-line">
+                <Table>
+                  <THead>
+                    <tr>
+                      <Th>Parameter</Th>
+                      <Th>Required</Th>
+                      <Th>Description</Th>
+                    </tr>
+                  </THead>
+                  <tbody>
+                    <Tr>
+                      <Td className="font-mono text-xs font-semibold text-brand-700">auth-token</Td>
+                      <Td>
+                        <Badge tone="danger">required</Badge>
+                      </Td>
+                      <Td>Your API key from above.</Td>
+                    </Tr>
+                    <Tr>
+                      <Td className="font-mono text-xs font-semibold text-brand-700">report</Td>
+                      <Td>
+                        <Badge tone="danger">required</Badge>
+                      </Td>
+                      <Td>
+                        <div className="flex flex-wrap gap-1.5">
+                          {REPORTS.map(([v, l]) => (
+                            <span key={v} className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs">
+                              <span className="font-mono font-bold">{v}</span> {l}
+                            </span>
+                          ))}
+                        </div>
+                      </Td>
+                    </Tr>
+                  </tbody>
+                </Table>
+              </div>
+            </div>
 
-        <h4 className="mb-2 font-medium text-gray-700">Parameters</h4>
-        <div className="mb-4 overflow-x-auto">
-          <table className="w-full text-left text-sm text-gray-500">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-700">
-              <tr>
-                <th className="px-4 py-2">Parameter</th>
-                <th className="px-4 py-2">Required</th>
-                <th className="px-4 py-2">Values</th>
-                <th className="px-4 py-2">Description</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b bg-white">
-                <td className="px-4 py-3 font-medium text-gray-900">auth-token</td>
-                <td className="px-4 py-3">Yes</td>
-                <td className="px-4 py-3">Your API key</td>
-                <td className="px-4 py-3">Authentication token</td>
-              </tr>
-              <tr className="border-b bg-white">
-                <td className="px-4 py-3 font-medium text-gray-900">report</td>
-                <td className="px-4 py-3">Yes</td>
-                <td className="px-4 py-3">1-5</td>
-                <td className="px-4 py-3">
-                  1 = Today, 2 = Yesterday, 3 = Last 7 days, 4 = Last 30 days, 5 = This month
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+            <div>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="flex items-center gap-2 text-sm font-bold text-ink-900">
+                  <Terminal className="h-4 w-4 text-ink-400" /> Example request
+                </h3>
+                <Segmented size="sm" value={lang} onChange={setLang} options={[{ value: 'curl', label: 'cURL' }, { value: 'python', label: 'Python' }, { value: 'node', label: 'Node.js' }, { value: 'php', label: 'PHP' }]} />
+              </div>
+              <CodeBlock code={samples[lang]} />
+            </div>
+          </div>
+        </Card>
 
-        <h4 className="mb-2 font-medium text-gray-700">Example Request</h4>
-        <div className="mb-4 overflow-x-auto rounded-lg bg-gray-800 p-4 text-gray-100">
-          <code className="text-sm">curl -X GET "{exampleUrl}"</code>
-        </div>
-
-        <h4 className="mb-2 font-medium text-gray-700">Example Response</h4>
-        <pre className="overflow-x-auto rounded-lg bg-gray-800 p-4 text-sm text-gray-100">
-{`{
+        <div className="space-y-6 xl:col-span-2">
+          <Card>
+            <CardHeader title="Example response" />
+            <div className="p-5">
+              <CodeBlock
+                code={`{
   "success": true,
   "message": "Success",
   "data": [
     {
       "offerid": 123,
-      "clickid": "abc123xyz",
-      "event": "lead",
+      "clickid": "65f1c2a9e4b7d",
+      "event": "install",
       "payout": 1.50,
       "status": "approved",
       "timestamp": "2026-07-20 14:30:22"
     }
   ]
 }`}
-        </pre>
-
-        <h3 className="mt-6 mb-2 text-lg font-semibold">Response Codes</h3>
-        <table className="w-full text-left text-sm text-gray-500">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-700">
-            <tr>
-              <th className="px-4 py-2">Code</th>
-              <th className="px-4 py-2">Description</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-b bg-white">
-              <td className="px-4 py-3 font-medium text-gray-900">200</td>
-              <td className="px-4 py-3">Always returned — check the "success" field in the body for errors</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div className="rounded-lg bg-white p-6 shadow-md">
-        <h2 className="mb-4 text-xl font-bold text-gray-800">Example (Python)</h2>
-        <pre className="overflow-x-auto rounded-lg bg-gray-800 p-4 text-sm text-gray-100">
-{`import requests
-
-response = requests.get("${info.reportUrl}", params={
-    "auth-token": "YOUR_AUTH_TOKEN",
-    "report": 3,
-})
-data = response.json()
-if data["success"]:
-    for conversion in data["data"]:
-        print(conversion)`}
-        </pre>
+              />
+            </div>
+          </Card>
+          <Card>
+            <CardHeader title="Errors" icon={ShieldAlert} />
+            <div className="space-y-3 p-5 text-sm text-ink-700">
+              <p>
+                Responses always return HTTP <span className="font-mono font-bold">200</span>. Check the <span className="font-mono font-bold">success</span> field — when it's{' '}
+                <span className="font-mono">false</span>, <span className="font-mono">message</span> explains why (missing or invalid key, bad report value).
+              </p>
+            </div>
+          </Card>
+        </div>
       </div>
     </div>
   );

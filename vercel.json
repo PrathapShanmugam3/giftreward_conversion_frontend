@@ -7,7 +7,6 @@
     { "source": "/go/:path*", "destination": "https://giftreward-conversion-backend.vercel.app/go/:path*" },
     { "source": "/postback/:path*", "destination": "https://giftreward-conversion-backend.vercel.app/postback/:path*" },
     { "source": "/report/:path*", "destination": "https://giftreward-conversion-backend.vercel.app/report/:path*" },
-    { "source": "/tracking/:path*", "destination": "https://giftreward-conversion-backend.vercel.app/tracking/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

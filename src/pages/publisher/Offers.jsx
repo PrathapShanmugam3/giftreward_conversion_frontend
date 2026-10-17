@@ -1,120 +1,217 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, Clock, Lock, Megaphone, Search, SlidersHorizontal, XCircle } from 'lucide-react';
 import { apiClient } from '../../api/client';
-import Loader from '../../components/Loader';
+import { usePageTitle } from '../../context/SiteContext';
+import OfferThumb from '../../components/OfferThumb';
+import { Badge, Button, Card, EmptyState, Input, PageHeader, Segmented, Select, Skeleton, useToast } from '../../components/ui';
+import { errorMessage, formatCurrency } from '../../utils/format';
 
-const STATUS_BADGE = {
-  approved: 'bg-green-100 text-green-700',
-  requested: 'bg-yellow-100 text-yellow-700',
-  rejected: 'bg-red-100 text-red-700',
-};
-
+// publisher/offers.php: active + pending offers with category / payout
+// type / search filters and request-access (auto-approval aware).
 export default function PublisherOffers() {
-  const [offers, setOffers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  usePageTitle('Offers');
+  const toast = useToast();
+  const [offers, setOffers] = useState(null);
   const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('');
+  const [payoutType, setPayoutType] = useState('');
+  const [access, setAccess] = useState('all');
   const [busyId, setBusyId] = useState(null);
-  const [notice, setNotice] = useState('');
 
   async function load() {
-    setLoading(true);
-    try {
-      const { data } = await apiClient.get('/publisher/offers', { params: { search } });
-      setOffers(data.offers);
-    } finally {
-      setLoading(false);
-    }
+    const { data } = await apiClient.get('/publisher/offers');
+    setOffers(data.offers);
   }
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleSearch(e) {
-    e.preventDefault();
-    await load();
-  }
+  const categories = useMemo(() => [...new Set((offers || []).map((o) => o.category).filter(Boolean))].sort(), [offers]);
+  const payoutTypes = useMemo(() => [...new Set((offers || []).map((o) => o.payoutType).filter(Boolean))].sort(), [offers]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (offers || []).filter((o) => {
+      if (category && o.category !== category) return false;
+      if (payoutType && o.payoutType !== payoutType) return false;
+      if (q && !`${o.name} ${o.description || ''}`.toLowerCase().includes(q)) return false;
+      if (access === 'available' && !o.canAccess) return false;
+      if (access === 'pending' && o.requestStatus !== 'requested') return false;
+      if (access === 'locked' && (o.canAccess || o.requestStatus === 'requested')) return false;
+      return true;
+    });
+  }, [offers, search, category, payoutType, access]);
+
+  const counts = useMemo(() => {
+    const list = offers || [];
+    return {
+      all: list.length,
+      available: list.filter((o) => o.canAccess).length,
+      pending: list.filter((o) => o.requestStatus === 'requested').length,
+      locked: list.filter((o) => !o.canAccess && o.requestStatus !== 'requested').length,
+    };
+  }, [offers]);
 
   async function requestOffer(offer) {
     setBusyId(offer.id);
-    setNotice('');
     try {
       const { data } = await apiClient.post(`/publisher/offers/${offer.id}/request`);
-      setNotice(data.message);
+      toast.success(data.message);
       await load();
     } catch (err) {
-      setNotice(err.response?.data?.message || 'Request failed');
+      toast.error(errorMessage(err, 'Request failed'));
     } finally {
       setBusyId(null);
     }
   }
 
-  function actionFor(offer) {
-    if (offer.requestStatus === 'approved' || offer.canAccess) {
-      return (
-        <a
-          href={`/publisher/offers/${offer.id}`}
-          className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          View / Promote
-        </a>
-      );
-    }
-    if (offer.requestStatus === 'requested') {
-      return <span className={`rounded-full px-3 py-1 text-xs font-medium ${STATUS_BADGE.requested}`}>Pending approval</span>;
-    }
-    if (offer.requestStatus === 'rejected') {
-      return <span className={`rounded-full px-3 py-1 text-xs font-medium ${STATUS_BADGE.rejected}`}>Rejected</span>;
-    }
-    return (
-      <button
-        type="button"
-        disabled={busyId === offer.id}
-        onClick={() => requestOffer(offer)}
-        className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-      >
-        {busyId === offer.id ? 'Requesting...' : 'Request Access'}
-      </button>
+  const hasFilters = search || category || payoutType || access !== 'all';
+
+  return (
+    <div>
+      <PageHeader eyebrow="Monetize" title="Offer marketplace" subtitle="Find high-converting offers, request access, and grab your tracking link." />
+
+      <Card className="mb-6 p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <Input icon={Search} placeholder="Search offers by name or description…" value={search} onChange={(e) => setSearch(e.target.value)} className="flex-1" />
+          <div className="grid grid-cols-2 gap-3 lg:flex">
+            <Select value={category} onChange={(e) => setCategory(e.target.value)} className="lg:w-48">
+              <option value="">All categories</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
+            <Select value={payoutType} onChange={(e) => setPayoutType(e.target.value)} className="lg:w-40">
+              <option value="">All payout types</option>
+              {payoutTypes.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <Segmented
+            value={access}
+            onChange={setAccess}
+            options={[
+              { value: 'all', label: 'All', count: counts.all },
+              { value: 'available', label: 'Ready to promote', count: counts.available },
+              { value: 'pending', label: 'Pending approval', count: counts.pending },
+              { value: 'locked', label: 'Request access', count: counts.locked },
+            ]}
+          />
+          {hasFilters && (
+            <Button
+              size="sm"
+              variant="ghost"
+              icon={SlidersHorizontal}
+              onClick={() => {
+                setSearch('');
+                setCategory('');
+                setPayoutType('');
+                setAccess('all');
+              }}
+            >
+              Clear filters
+            </Button>
+          )}
+        </div>
+      </Card>
+
+      {!offers ? (
+        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-64 rounded-2xl" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <Card>
+          <EmptyState icon={Megaphone} title="No offers match" description="Try a different search or clear the filters to see every offer." />
+        </Card>
+      ) : (
+        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((offer) => (
+            <OfferCard key={offer.id} offer={offer} busy={busyId === offer.id} onRequest={() => requestOffer(offer)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OfferCard({ offer, busy, onRequest }) {
+  const eventCount = offer.OfferEvents?.length || 0;
+  let cta;
+  if (offer.canAccess) {
+    cta = (
+      <Button to={`/publisher/offers/${offer.id}`} className="w-full" iconRight={ArrowRight}>
+        Get tracking link
+      </Button>
+    );
+  } else if (offer.requestStatus === 'requested') {
+    cta = (
+      <Button variant="soft" className="w-full" disabled icon={Clock}>
+        Awaiting approval
+      </Button>
+    );
+  } else if (offer.requestStatus === 'rejected') {
+    cta = (
+      <Button variant="danger-soft" className="w-full" disabled icon={XCircle}>
+        Request declined
+      </Button>
+    );
+  } else {
+    cta = (
+      <Button variant="secondary" className="w-full" loading={busy} icon={Lock} onClick={onRequest}>
+        Request access
+      </Button>
     );
   }
 
   return (
-    <div>
-      <h1 className="mb-4 text-xl font-bold text-gray-800">Offers</h1>
-
-      <form onSubmit={handleSearch} className="mb-4 flex gap-2">
-        <input
-          type="text"
-          placeholder="Search offers..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full max-w-xs rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-        />
-        <button type="submit" className="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200">
-          Search
-        </button>
-      </form>
-
-      {notice && <p className="mb-4 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700">{notice}</p>}
-
-      {loading ? (
-        <Loader />
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {offers.map((offer) => (
-            <div key={offer.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-              <div className="mb-2 flex items-start justify-between">
-                <h2 className="font-semibold text-gray-800">{offer.name}</h2>
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{offer.payoutType}</span>
-              </div>
-              <p className="mb-3 line-clamp-2 text-sm text-gray-500">{offer.description}</p>
-              <p className="mb-3 text-sm font-medium text-gray-700">Total payout: ₹{offer.totalPayout}</p>
-              {actionFor(offer)}
-            </div>
-          ))}
-          {offers.length === 0 && <p className="text-sm text-gray-500">No offers found.</p>}
+    <Card hover className="group flex flex-col overflow-hidden">
+      <div className="relative h-24 bg-gradient-to-br from-brand-600 via-brand-500 to-accent-600">
+        <div className="bg-grid absolute inset-0 opacity-40" />
+        {offer.image && <img src={offer.image} alt="" className="absolute inset-0 h-full w-full object-cover opacity-90" onError={(e) => e.currentTarget.remove()} />}
+        <div className="absolute top-3 right-3 flex gap-1.5">
+          <Badge tone="neutral" className="bg-white/90 ring-white/60 backdrop-blur">
+            {offer.payoutType}
+          </Badge>
+          {offer.status === 'pending' && (
+            <Badge tone="warning" className="bg-amber-50/95">
+              Private
+            </Badge>
+          )}
         </div>
-      )}
-    </div>
+      </div>
+      <div className="flex flex-1 flex-col p-5 pt-0">
+        <div className="relative z-10 -mt-7 mb-3">
+          <span className="inline-block rounded-2xl bg-white p-1 shadow-card">
+            <OfferThumb offer={offer} size="lg" />
+          </span>
+        </div>
+        <Link to={`/publisher/offers/${offer.id}`} className="text-base font-extrabold tracking-tight text-ink-900 hover:text-brand-700">
+          {offer.name}
+        </Link>
+        <p className="mt-0.5 text-xs font-semibold text-ink-500">{offer.category || 'General'}</p>
+        <p className="mt-3 line-clamp-2 min-h-10 text-sm text-ink-500">{offer.description || 'No description provided.'}</p>
+        <div className="mt-4 flex items-end justify-between rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-line/70">
+          <div>
+            <p className="text-[11px] font-semibold text-ink-500">Total payout</p>
+            <p className="text-xl font-extrabold text-ink-900 tabular-nums">{formatCurrency(offer.totalPayout)}</p>
+          </div>
+          <p className="text-xs text-ink-500">
+            {eventCount} event{eventCount === 1 ? '' : 's'}
+          </p>
+        </div>
+        <div className="mt-4">{cta}</div>
+      </div>
+    </Card>
   );
 }

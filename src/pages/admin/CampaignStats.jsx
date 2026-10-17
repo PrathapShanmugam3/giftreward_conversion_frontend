@@ -1,100 +1,123 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { CalendarRange, CheckCircle2, IndianRupee, MousePointerClick, Trophy } from 'lucide-react';
 import { apiClient } from '../../api/client';
-import Loader from '../../components/Loader';
+import { usePageTitle } from '../../context/SiteContext';
+import { Button, Card, CardHeader, Field, Input, PageHeader, Select, StatCard, Table, TableEmpty, TableSkeleton, Td, Th, THead, Tr } from '../../components/ui';
+import { formatCurrency, formatNumber, formatPercent, isoDate, monthStart } from '../../utils/format';
 
-const monthStart = () => {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
-};
-const today = () => new Date().toISOString().slice(0, 10);
-
-// Per-active-offer clicks/conversions/payout in a date range — mirrors
-// sadmin/campaign-stats.php (admin's network-wide view, distinct from the
-// publisher's own campaign-stats page which reads campaign_clicks).
+// sadmin/campaign-stats.php: per active offer — clicks, conversions and
+// payouts in a date range (network-wide; the publisher's own campaign
+// stats page reads campaign_clicks instead).
 export default function AdminCampaignStats() {
-  const [startDate, setStartDate] = useState(monthStart());
-  const [endDate, setEndDate] = useState(today());
-  const [offers, setOffers] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  async function load() {
-    setLoading(true);
-    try {
-      const { data } = await apiClient.get('/admin/reports/campaign-stats', {
-        params: { start_date: startDate, end_date: endDate },
-      });
-      setOffers(data.offers);
-    } finally {
-      setLoading(false);
-    }
-  }
+  usePageTitle('Offer stats');
+  const [filters, setFilters] = useState({ start: monthStart(), end: isoDate(), offerId: '' });
+  const [applied, setApplied] = useState(filters);
+  const [rows, setRows] = useState(null);
+  const [allOffers, setAllOffers] = useState([]);
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    apiClient.get('/admin/offers', { params: { limit: 100, status: 'active' } }).then(({ data }) => setAllOffers(data.offers));
   }, []);
 
-  function applyFilters(e) {
-    e.preventDefault();
-    load();
-  }
+  useEffect(() => {
+    setRows(null);
+    apiClient
+      .get('/admin/reports/campaign-stats', { params: { start_date: applied.start, end_date: applied.end, offer_id: applied.offerId || undefined } })
+      .then(({ data }) => setRows(data.offers));
+  }, [applied]);
 
-  return (
-    <div className="admin-theme">
-      <h1 className="mb-4 text-xl font-bold text-admin-dark">Campaign Stats (by Offer)</h1>
-
-      <form onSubmit={applyFilters} className="mb-6 flex flex-wrap items-end gap-3 rounded-admin bg-white p-4 shadow-admin-card">
-        <Field label="From">
-          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
-        </Field>
-        <Field label="To">
-          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
-        </Field>
-        <button type="submit" className="rounded-lg bg-admin-primary px-4 py-2 text-sm font-semibold text-white hover:bg-admin-primary-dark">
-          Apply
-        </button>
-      </form>
-
-      {loading ? (
-        <Loader />
-      ) : (
-        <div className="overflow-x-auto rounded-admin bg-white shadow-admin-card">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-[#f8fafc]">
-              <tr>
-                <th className="px-3 py-3 text-left font-semibold text-admin-dark">Offer</th>
-                <th className="px-3 py-3 text-left font-semibold text-admin-dark">Clicks</th>
-                <th className="px-3 py-3 text-left font-semibold text-admin-dark">Conversions</th>
-                <th className="px-3 py-3 text-left font-semibold text-admin-dark">Payout</th>
-                <th className="px-3 py-3 text-left font-semibold text-admin-dark">Conv. Rate</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {offers.map((o) => (
-                <tr key={o.id}>
-                  <td className="px-3 py-3 font-medium text-gray-800">{o.name}</td>
-                  <td className="px-3 py-3">{o.clicks}</td>
-                  <td className="px-3 py-3">{o.conversions}</td>
-                  <td className="px-3 py-3">₹{o.payout}</td>
-                  <td className="px-3 py-3">{o.clicks > 0 ? ((o.conversions / o.clicks) * 100).toFixed(2) : '0.00'}%</td>
-                </tr>
-              ))}
-              {offers.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-500">No active offers found.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+  const sorted = useMemo(() => [...(rows || [])].sort((a, b) => Number(b.payout) - Number(a.payout)), [rows]);
+  const totals = useMemo(
+    () =>
+      (rows || []).reduce(
+        (t, o) => ({ clicks: t.clicks + Number(o.clicks), conversions: t.conversions + Number(o.conversions), payout: t.payout + Number(o.payout) }),
+        { clicks: 0, conversions: 0, payout: 0 }
+      ),
+    [rows]
   );
-}
+  const maxPayout = Math.max(1, ...sorted.map((o) => Number(o.payout)));
 
-function Field({ label, children }) {
   return (
-    <div>
-      <label className="mb-1 block text-xs font-medium text-gray-500">{label}</label>
-      {children}
+    <div className="space-y-6">
+      <PageHeader eyebrow="Performance" title="Offer stats" subtitle="How each active offer performed across the whole network." />
+
+      <Card className="p-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setApplied(filters);
+          }}
+          className="grid gap-3 sm:grid-cols-[160px_160px_1fr_auto]"
+        >
+          <Field label="From">
+            <Input type="date" value={filters.start} onChange={(e) => setFilters((f) => ({ ...f, start: e.target.value }))} />
+          </Field>
+          <Field label="To">
+            <Input type="date" value={filters.end} onChange={(e) => setFilters((f) => ({ ...f, end: e.target.value }))} />
+          </Field>
+          <Field label="Offer">
+            <Select value={filters.offerId} onChange={(e) => setFilters((f) => ({ ...f, offerId: e.target.value }))}>
+              <option value="">All active offers</option>
+              {allOffers.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <div className="flex items-end">
+            <Button type="submit" icon={CalendarRange} className="w-full">
+              Apply
+            </Button>
+          </div>
+        </form>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard label="Clicks" value={formatNumber(totals.clicks)} icon={MousePointerClick} tone="info" loading={!rows} />
+        <StatCard label="Conversions" value={formatNumber(totals.conversions)} sub={`${formatPercent(totals.clicks ? (totals.conversions / totals.clicks) * 100 : 0)} CR`} icon={CheckCircle2} tone="success" loading={!rows} />
+        <StatCard label="Payout" value={formatCurrency(totals.payout)} icon={IndianRupee} tone="brand" loading={!rows} />
+      </div>
+
+      <Card>
+        <CardHeader title="By offer" subtitle="Sorted by payout" icon={Trophy} />
+        <Table minWidth={760}>
+          <THead>
+            <tr>
+              <Th>Offer</Th>
+              <Th align="right">Clicks</Th>
+              <Th align="right">Conversions</Th>
+              <Th align="right">CR</Th>
+              <Th>Payout share</Th>
+              <Th align="right">Payout</Th>
+            </tr>
+          </THead>
+          <tbody>
+            {!rows ? (
+              <TableSkeleton rows={6} cols={6} />
+            ) : sorted.length === 0 ? (
+              <TableEmpty colSpan={6} title="No active offers in this range" />
+            ) : (
+              sorted.map((o) => (
+                <Tr key={o.id}>
+                  <Td className="font-bold text-ink-900">{o.name}</Td>
+                  <Td align="right" className="tabular-nums">{formatNumber(o.clicks)}</Td>
+                  <Td align="right" className="tabular-nums">{formatNumber(o.conversions)}</Td>
+                  <Td align="right" className="tabular-nums">{formatPercent(o.clicks > 0 ? (o.conversions / o.clicks) * 100 : 0)}</Td>
+                  <Td className="w-48">
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div className="h-full rounded-full bg-brand-600" style={{ width: `${(Number(o.payout) / maxPayout) * 100}%` }} />
+                    </div>
+                  </Td>
+                  <Td align="right" className="font-extrabold text-ink-900 tabular-nums">
+                    {formatCurrency(o.payout)}
+                  </Td>
+                </Tr>
+              ))
+            )}
+          </tbody>
+        </Table>
+      </Card>
     </div>
   );
 }

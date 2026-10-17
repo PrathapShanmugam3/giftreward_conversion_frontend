@@ -17,16 +17,16 @@ function createAuthContext(role) {
       } catch {
         // ignore — we're clearing local state regardless
       }
-      setAccessToken(null);
+      setAccessToken(role, null);
       setUser(null);
     }, []);
 
     useEffect(() => {
-      setUnauthorizedHandler(() => setUser(null));
+      setUnauthorizedHandler(role, () => setUser(null));
       (async () => {
         try {
           const { data } = await apiClient.post(`/auth/${role}/refresh`);
-          setAccessToken(data.accessToken);
+          setAccessToken(role, data.accessToken);
           setUser(data.user);
         } catch {
           setUser(null);
@@ -37,11 +37,14 @@ function createAuthContext(role) {
     }, []);
 
     const login = useCallback((accessToken, userData) => {
-      setAccessToken(accessToken);
+      setAccessToken(role, accessToken);
       setUser(userData);
     }, []);
 
-    const value = useMemo(() => ({ user, loading, login, logout }), [user, loading, login, logout]);
+    // Lets pages (e.g. Profile) reflect edits in the header without a reload.
+    const updateUser = useCallback((patch) => setUser((u) => (u ? { ...u, ...patch } : u)), []);
+
+    const value = useMemo(() => ({ user, loading, login, logout, updateUser }), [user, loading, login, logout, updateUser]);
 
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
   }

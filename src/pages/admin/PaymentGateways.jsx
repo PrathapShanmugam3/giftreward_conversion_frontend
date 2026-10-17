@@ -1,21 +1,25 @@
 import { useEffect, useState } from 'react';
+import { CircleDot, Cloud, CreditCard, Hand, Pencil, Plus, Trash2 } from 'lucide-react';
 import { apiClient } from '../../api/client';
+import { usePageTitle } from '../../context/SiteContext';
+import { Alert, Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Skeleton, StatCard, StatusBadge, Textarea, useConfirm, useToast } from '../../components/ui';
+import { errorMessage, formatDate } from '../../utils/format';
 
+// sadmin/gateway_management.php: payment_gateways CRUD; API-type gateways
+// also carry a gateway_config row (endpoint, method, credentials, success
+// codes, UPI ids).
 export default function PaymentGateways() {
-  const [gateways, setGateways] = useState([]);
+  usePageTitle('Payment gateways');
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [gateways, setGateways] = useState(null);
   const [stats, setStats] = useState(null);
   const [modal, setModal] = useState(undefined);
-  const [loading, setLoading] = useState(true);
 
   async function load() {
-    setLoading(true);
-    try {
-      const { data } = await apiClient.get('/admin/gateways');
-      setGateways(data.gateways);
-      setStats(data.stats);
-    } finally {
-      setLoading(false);
-    }
+    const { data } = await apiClient.get('/admin/gateways');
+    setGateways(data.gateways);
+    setStats(data.stats);
   }
 
   useEffect(() => {
@@ -23,163 +27,203 @@ export default function PaymentGateways() {
   }, []);
 
   async function handleSubmit(payload) {
-    if (modal.gateway) {
-      await apiClient.put(`/admin/gateways/${modal.gateway.id}`, payload);
-    } else {
-      await apiClient.post('/admin/gateways', payload);
-    }
+    if (modal) await apiClient.put(`/admin/gateways/${modal.id}`, payload);
+    else await apiClient.post('/admin/gateways', payload);
+    toast.success(modal ? 'Gateway updated' : 'Gateway added');
     setModal(undefined);
     await load();
   }
 
   async function handleDelete(g) {
-    if (!confirm(`Delete gateway "${g.name}"?`)) return;
-    await apiClient.delete(`/admin/gateways/${g.id}`);
-    await load();
+    if (!(await confirm({ title: `Delete ${g.name}?`, message: 'Its API configuration is removed too.', confirmLabel: 'Delete gateway' }))) return;
+    try {
+      await apiClient.delete(`/admin/gateways/${g.id}`);
+      toast.success('Gateway deleted');
+      await load();
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
   }
 
   return (
-    <div className="admin-theme">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-admin-dark">Payment Gateways</h1>
-        <button onClick={() => setModal({ gateway: null })} className="rounded-lg bg-admin-primary px-4 py-2 text-sm font-semibold text-white hover:bg-admin-primary-dark">
-          + New Gateway
-        </button>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Finance"
+        title="Payment gateways"
+        subtitle="Payout rails used to pay publishers — manual transfers or API-driven providers."
+        actions={
+          <Button icon={Plus} onClick={() => setModal(null)}>
+            Add gateway
+          </Button>
+        }
+      />
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Gateways" value={stats?.total ?? '—'} icon={CreditCard} tone="brand" loading={!stats} />
+        <StatCard label="Active" value={stats?.active ?? '—'} icon={CircleDot} tone="success" loading={!stats} />
+        <StatCard label="API" value={stats?.apiType ?? '—'} icon={Cloud} tone="info" loading={!stats} />
+        <StatCard label="Manual" value={stats?.manualType ?? '—'} icon={Hand} tone="slate" loading={!stats} />
       </div>
 
-      {stats && (
-        <div className="mb-6 grid grid-cols-4 gap-3">
-          <StatCard label="Total" value={stats.total} />
-          <StatCard label="Active" value={stats.active} variant="success" />
-          <StatCard label="API Type" value={stats.apiType} variant="warning" />
-          <StatCard label="Manual Type" value={stats.manualType} />
+      {!gateways ? (
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-44 rounded-2xl" />
+          ))}
+        </div>
+      ) : gateways.length === 0 ? (
+        <Card>
+          <EmptyState icon={CreditCard} title="No gateways yet" description="Add a manual or API gateway to record how payouts are sent." action={<Button icon={Plus} onClick={() => setModal(null)}>Add gateway</Button>} />
+        </Card>
+      ) : (
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {gateways.map((g) => (
+            <Card key={g.id} hover className="flex flex-col gap-4 p-5">
+              <div className="flex items-start gap-3">
+                <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white ${g.type === 'api' ? 'bg-gradient-to-br from-sky-400 to-blue-600' : 'bg-gradient-to-br from-slate-500 to-slate-700'}`}>
+                  {g.type === 'api' ? <Cloud className="h-6 w-6" /> : <Hand className="h-6 w-6" />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-base font-extrabold text-ink-900">{g.name}</p>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    <Badge tone={g.type === 'api' ? 'info' : 'neutral'}>{g.type === 'api' ? 'API' : 'Manual'}</Badge>
+                    <StatusBadge status={g.status} />
+                  </div>
+                </div>
+              </div>
+              {g.type === 'api' && g.GatewayConfig && (
+                <dl className="space-y-1.5 rounded-xl bg-slate-50 p-3 text-xs ring-1 ring-line">
+                  <div className="flex gap-2">
+                    <dt className="w-16 shrink-0 text-ink-500">Endpoint</dt>
+                    <dd className="truncate font-mono text-ink-900" title={g.GatewayConfig.apiEndpoint}>
+                      {g.GatewayConfig.apiMethod} {g.GatewayConfig.apiEndpoint || '—'}
+                    </dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="w-16 shrink-0 text-ink-500">Success</dt>
+                    <dd className="font-mono text-ink-900">{g.GatewayConfig.successCodes || '—'}</dd>
+                  </div>
+                </dl>
+              )}
+              <div className="mt-auto flex items-center justify-between border-t border-line pt-3">
+                <span className="text-xs text-ink-400">Added {formatDate(g.createdAt)}</span>
+                <div>
+                  <Button size="icon-sm" variant="ghost" icon={Pencil} onClick={() => setModal(g)} aria-label="Edit" />
+                  <Button size="icon-sm" variant="ghost" className="hover:text-rose-600" icon={Trash2} onClick={() => handleDelete(g)} aria-label="Delete" />
+                </div>
+              </div>
+            </Card>
+          ))}
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-admin bg-white shadow-admin-card">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-[#f8fafc]">
-            <tr>
-              <th className="px-3 py-3 text-left font-semibold text-admin-dark">Name</th>
-              <th className="px-3 py-3 text-left font-semibold text-admin-dark">Type</th>
-              <th className="px-3 py-3 text-left font-semibold text-admin-dark">Status</th>
-              <th className="px-3 py-3 text-right font-semibold text-admin-dark">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {gateways.map((g) => (
-              <tr key={g.id}>
-                <td className="px-3 py-3 font-medium text-gray-800">{g.name}</td>
-                <td className="px-3 py-3 uppercase text-gray-600">{g.type}</td>
-                <td className="px-3 py-3">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                    g.status === 'active'
-                      ? 'bg-admin-success text-white'
-                      : g.status === 'testing'
-                        ? 'bg-admin-warning text-admin-dark' // dark text for contrast on the orange warning bg, matches admin.css's .badge-warning
-                        : 'bg-admin-gray text-white'
-                  }`}>
-                    {g.status}
-                  </span>
-                </td>
-                <td className="px-3 py-3 text-right">
-                  <button onClick={() => setModal({ gateway: g })} className="mr-3 font-medium text-admin-primary">Edit</button>
-                  <button onClick={() => handleDelete(g)} className="font-medium text-admin-danger">Delete</button>
-                </td>
-              </tr>
-            ))}
-            {!loading && gateways.length === 0 && (
-              <tr><td colSpan={4} className="px-4 py-6 text-center text-gray-500">No gateways found.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {modal !== undefined && <GatewayModal gateway={modal.gateway} onClose={() => setModal(undefined)} onSubmit={handleSubmit} />}
+      {modal !== undefined && <GatewayModal gateway={modal} onClose={() => setModal(undefined)} onSubmit={handleSubmit} />}
     </div>
   );
 }
 
 function GatewayModal({ gateway, onClose, onSubmit }) {
-  const [form, setForm] = useState({
-    name: gateway?.name || '',
-    type: gateway?.type || 'manual',
-    status: gateway?.status || 'testing',
-    config: { apiEndpoint: gateway?.GatewayConfig?.apiEndpoint || '', apiMethod: gateway?.GatewayConfig?.apiMethod || 'POST' },
+  const cfg = gateway?.GatewayConfig || {};
+  const [form, setForm] = useState({ name: gateway?.name || '', type: gateway?.type || 'manual', status: gateway?.status || 'testing' });
+  const [config, setConfig] = useState({
+    apiEndpoint: cfg.apiEndpoint || '',
+    apiMethod: cfg.apiMethod || 'POST',
+    apiKey: cfg.apiKey || '',
+    apiSecret: cfg.apiSecret || '',
+    successCodes: cfg.successCodes || '200,201',
+    upiIds: cfg.upiIds || '',
   });
   const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const setC = (k) => (e) => setConfig((c) => ({ ...c, [k]: e.target.value }));
 
-  async function handleSubmit(e) {
+  async function submit(e) {
     e.preventDefault();
     setError('');
-    setSubmitting(true);
+    setSaving(true);
     try {
-      const payload = { name: form.name, type: form.type, status: form.status };
-      if (form.type === 'api') payload.config = form.config;
-      await onSubmit(payload);
+      await onSubmit(form.type === 'api' ? { ...form, config } : form);
     } catch (err) {
-      setError(err.response?.data?.message || err.response?.data?.details?.[0]?.msg || 'Save failed');
-    } finally {
-      setSubmitting(false);
+      setError(errorMessage(err, 'Save failed'));
+      setSaving(false);
     }
   }
 
   return (
-    <div className="admin-theme fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <form onSubmit={handleSubmit} className="w-full max-w-md rounded-admin bg-white p-6 shadow-xl">
-        <h2 className="mb-4 text-lg font-bold text-admin-dark">{gateway ? 'Edit Gateway' : 'New Gateway'}</h2>
-        {error && <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-admin-danger">{error}</p>}
-        <div className="space-y-3">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Name</label>
-            <input required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Type</label>
-            <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
-              <option value="manual">Manual</option>
-              <option value="api">API</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Status</label>
-            <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+    <Modal
+      title={gateway ? `Edit ${gateway.name}` : 'Add gateway'}
+      icon={CreditCard}
+      size="lg"
+      onClose={onClose}
+      onSubmit={submit}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" loading={saving}>
+            Save gateway
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        {error && <Alert tone="danger">{error}</Alert>}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Name" required className="sm:col-span-2">
+            <Input required placeholder="e.g. Razorpay Payouts" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+          </Field>
+          <Field label="Type">
+            <Segmented
+              value={form.type}
+              onChange={(v) => setForm((f) => ({ ...f, type: v }))}
+              options={[
+                { value: 'manual', label: 'Manual' },
+                { value: 'api', label: 'API' },
+              ]}
+            />
+          </Field>
+          <Field label="Status">
+            <Select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
               <option value="testing">Testing</option>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
-            </select>
-          </div>
-          {form.type === 'api' && (
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">API Endpoint</label>
-              <input value={form.config.apiEndpoint} onChange={(e) => setForm((f) => ({ ...f, config: { ...f.config, apiEndpoint: e.target.value } }))} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
+            </Select>
+          </Field>
+        </div>
+
+        {form.type === 'api' && (
+          <div className="space-y-4 rounded-2xl bg-slate-50 p-4 ring-1 ring-line">
+            <p className="text-xs font-bold tracking-wider text-ink-500 uppercase">API configuration</p>
+            <div className="grid gap-4 sm:grid-cols-[120px_1fr]">
+              <Field label="Method">
+                <Select value={config.apiMethod} onChange={setC('apiMethod')}>
+                  {['POST', 'GET', 'PUT', 'DELETE'].map((m) => (
+                    <option key={m}>{m}</option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Endpoint">
+                <Input type="url" className="font-mono text-xs" placeholder="https://api.provider.com/payouts" value={config.apiEndpoint} onChange={setC('apiEndpoint')} />
+              </Field>
             </div>
-          )}
-        </div>
-        <div className="mt-6 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700">Cancel</button>
-          <button type="submit" disabled={submitting} className="rounded-lg bg-admin-primary px-4 py-2 text-sm font-semibold text-white hover:bg-admin-primary-dark disabled:opacity-60">
-            {submitting ? 'Saving...' : 'Save'}
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-const STAT_BORDER = {
-  primary: 'border-l-admin-primary bg-admin-primary/10',
-  success: 'border-l-admin-success bg-admin-success/10',
-  warning: 'border-l-admin-warning bg-admin-warning/10',
-  danger: 'border-l-admin-danger bg-admin-danger/10',
-};
-
-function StatCard({ label, value, variant = 'primary' }) {
-  return (
-    <div className={`rounded-admin border-l-4 bg-white p-4 shadow-admin-card ${STAT_BORDER[variant]}`}>
-      <div className="text-xs text-admin-gray">{label}</div>
-      <div className="mt-1 text-2xl font-bold text-admin-dark">{value}</div>
-    </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="API key">
+                <Input className="font-mono text-xs" value={config.apiKey} onChange={setC('apiKey')} autoComplete="off" />
+              </Field>
+              <Field label="API secret">
+                <Input type="password" className="font-mono text-xs" value={config.apiSecret} onChange={setC('apiSecret')} autoComplete="off" />
+              </Field>
+              <Field label="Success HTTP codes" hint="Comma-separated">
+                <Input className="font-mono text-xs" value={config.successCodes} onChange={setC('successCodes')} />
+              </Field>
+            </div>
+            <Field label="UPI IDs" hint="Optional, one per line or comma-separated">
+              <Textarea rows={2} className="font-mono text-xs" value={config.upiIds} onChange={setC('upiIds')} />
+            </Field>
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }

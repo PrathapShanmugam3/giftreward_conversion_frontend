@@ -1,75 +1,147 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 /*
- * Admin design tokens — lifted from public_html/assets/css/admin.css so the
- * React admin panel can match the legacy sadmin/*.php look via Tailwind's
- * CSS-first @theme config (v4). Referenced as e.g. bg-admin-primary,
- * text-admin-danger, shadow-admin-card, rounded-admin.
+ * Design tokens for the whole app (publisher panel, admin panel, public
+ * pages). Tailwind v4 CSS-first config: every --color-* below becomes a
+ * utility (bg-brand-600, text-ink-500, ring-line ...). Swap the brand scale
+ * here to re-skin the entire product.
  */
 @theme {
-  --color-admin-primary: #4361ee;
-  --color-admin-primary-dark: #3a56d4;
-  --color-admin-secondary: #3f37c9;
-  --color-admin-success: #4cc9f0;
-  --color-admin-info: #4895ef;
-  --color-admin-warning: #f8961e;
-  --color-admin-danger: #f72585;
-  --color-admin-light: #f8f9fa;
-  --color-admin-dark: #212529;
-  --color-admin-gray: #6c757d;
-  --color-admin-gray-light: #e9ecef;
-  --color-admin-bg: #f5f7fb;
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --radius-admin: 10px;
+  /* Brand: indigo -> violet */
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
+  --color-brand-400: #818cf8;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
+  --color-brand-800: #3730a3;
+  --color-brand-900: #312e81;
+  --color-accent-500: #8b5cf6;
+  --color-accent-600: #7c3aed;
 
-  --shadow-admin-card: 0 4px 6px rgba(0, 0, 0, 0.05);
-  --shadow-admin-card-hover: 0 10px 15px rgba(0, 0, 0, 0.1);
+  /* Neutral ink (text) and surfaces */
+  --color-ink-900: #0f172a;
+  --color-ink-700: #334155;
+  --color-ink-500: #64748b;
+  --color-ink-400: #94a3b8;
+  --color-line: #e7e9f0;
+  --color-canvas: #f5f6fa;
+  --color-sidebar: #0b1020;
+
+  /* Charts — single-series brand color, validated with the dataviz checker */
+  --color-chart-1: #4f46e5;
+
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-card-hover: 0 10px 30px -12px rgba(15, 23, 42, 0.18);
+  --shadow-glow: 0 10px 30px -10px rgba(79, 70, 229, 0.55);
+  --shadow-pop: 0 24px 60px -20px rgba(15, 23, 42, 0.35);
+
+  --animate-fade-in: fade-in 0.25s ease-out both;
+  --animate-scale-in: scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-slide-up: slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-shimmer: shimmer 1.4s linear infinite;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  from { background-position: -400px 0; }
+  to { background-position: 400px 0; }
 }
 
 :root {
   color-scheme: light;
 }
 
-body {
-  margin: 0;
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Admin panel pages use Inter per admin.css's design system */
-.admin-theme {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background-color: #f5f7fb;
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background-color: var(--color-canvas);
+  color: var(--color-ink-900);
+}
+
+::selection {
+  background: var(--color-brand-200);
+  color: var(--color-brand-900);
+}
+
+/* Slim, quiet scrollbars for tables and the sidebar */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+}
+.scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.45); border-radius: 999px; }
+
+/* Skeleton shimmer */
+.skeleton {
+  background: linear-gradient(90deg, #eef0f5 0%, #f7f8fb 40%, #eef0f5 80%);
+  background-size: 800px 100%;
+  animation: var(--animate-shimmer);
+}
+
+/* Soft dotted grid used behind hero / auth panels */
+.bg-grid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.14) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.bg-grid-dark {
+  background-image: radial-gradient(rgba(79, 70, 229, 0.12) 1px, transparent 1px);
+  background-size: 22px 22px;
 }
 
 /*
- * Animated glow border — mirrors o/index.php's .glow-border treatment on
- * the cashback offer card (public_html/o/index.php's inline <style> block).
- * Used by CampaignLanding/Referral to tighten the match with the legacy
- * campaign landing page.
+ * Animated glow border — carried over from the legacy o/index.php cashback
+ * card (.glow-border), recoloured to the brand gradient.
  */
-.campaign-glow-border {
-  z-index: 1;
-}
-
-.campaign-glow-border::before {
+.glow-border { position: relative; z-index: 1; }
+.glow-border::before {
   content: '';
   position: absolute;
-  top: -2px;
-  left: -2px;
-  right: -2px;
-  bottom: -2px;
-  background: linear-gradient(45deg, #3b82f6, #60a5fa, #93c5fd, #bfdbfe, #93c5fd, #60a5fa, #3b82f6);
+  inset: -2px;
+  background: linear-gradient(45deg, #4f46e5, #8b5cf6, #22d3ee, #8b5cf6, #4f46e5);
   background-size: 400%;
-  border-radius: 18px;
+  border-radius: inherit;
   z-index: -1;
-  animation: campaign-border-glow 15s linear infinite;
-  filter: blur(2px);
-  opacity: 0.8;
+  animation: glow-pan 14s linear infinite;
+  filter: blur(3px);
+  opacity: 0.75;
 }
-
-@keyframes campaign-border-glow {
+@keyframes glow-pan {
   0% { background-position: 0 0; }
   50% { background-position: 400% 0; }
   100% { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff; }
 }

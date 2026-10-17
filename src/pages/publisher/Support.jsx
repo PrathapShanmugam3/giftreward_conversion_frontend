@@ -1,178 +1,118 @@
 import { useState } from 'react';
-import { Mail, MessageCircle, Send } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, Clock, Mail, MessageCircle, Send } from 'lucide-react';
 import { apiClient } from '../../api/client';
+import { usePublisherAuth } from '../../context/AuthContext';
+import { usePageTitle } from '../../context/SiteContext';
+import { BRAND } from '../../config/brand';
+import { Alert, Button, Card, CardHeader, Field, Input, PageHeader, Textarea } from '../../components/ui';
+import { cn, errorMessage } from '../../utils/format';
 
-// Mirrors publisher/support.php: contact cards (Telegram/WhatsApp/email),
-// an FAQ accordion, and a contact form that now actually submits (the
-// legacy page's form had no action/handler at all — see /api/contact).
 const FAQS = [
-  {
-    q: 'How do I track my conversions?',
-    a: 'Open Reports or Conversions from the sidebar to see your click and conversion activity in real time.',
-  },
-  {
-    q: 'When do I get paid?',
-    a: 'Approved conversions add to your wallet balance immediately. Request a withdrawal any time from the Wallet page once you meet the minimum payout threshold.',
-  },
-  {
-    q: 'How do I request access to a new offer?',
-    a: 'Browse Offers, open the one you want, and click Request Access. An admin will review and approve it.',
-  },
+  { q: 'How do I track my conversions?', a: 'Open Reports for click-level data or Conversions for every credited conversion, including the UPI, referrer and mobile captured on the click.' },
+  { q: 'When do I get paid?', a: 'Approved conversions credit your wallet immediately. Request a withdrawal from the Wallet page once you pass the minimum payout; our team reviews and processes it.' },
+  { q: 'How do I get access to an offer?', a: 'Open the offer in the marketplace and click Request access. Some offers approve instantly, others are reviewed by an admin.' },
+  { q: 'Why was my withdrawal rejected?', a: 'Check the note on the invoice. Rejected withdrawals are refunded to your wallet automatically, so you can correct the details and request again.' },
+  { q: 'How do postbacks work?', a: 'Add a URL on the Postbacks page or inside an offer. We call it with the conversion details whenever that offer and event convert.' },
 ];
 
+const CHANNELS = [
+  { icon: Send, title: 'Telegram', desc: 'Fastest replies from the affiliate team', href: BRAND.telegram, label: 'Message us', cls: 'from-sky-400 to-blue-600' },
+  { icon: MessageCircle, title: 'WhatsApp', desc: 'Chat with us directly', href: BRAND.whatsapp, label: BRAND.phone, cls: 'from-emerald-400 to-green-600' },
+  { icon: Mail, title: 'Email', desc: 'For account and payout questions', href: `mailto:${BRAND.email}`, label: BRAND.email, cls: 'from-rose-400 to-pink-600' },
+];
+
+// publisher/support.php: contact channels, FAQ and a contact form (the
+// legacy form had no handler; this one posts to /api/contact).
 export default function PublisherSupport() {
-  const [openFaq, setOpenFaq] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' });
+  usePageTitle('Support');
+  const { user } = usePublisherAuth();
+  const [openFaq, setOpenFaq] = useState(0);
+  const [form, setForm] = useState({ name: user?.name || '', email: user?.email || '', subject: '', message: '' });
   const [status, setStatus] = useState('idle');
+  const [error, setError] = useState('');
 
   async function handleSubmit(e) {
     e.preventDefault();
     setStatus('sending');
+    setError('');
     try {
       await apiClient.post('/contact', { ...form, source: 'publisher_support' });
       setStatus('sent');
-      setForm({ name: '', email: '', subject: '', message: '' });
-    } catch {
+      setForm((f) => ({ ...f, subject: '', message: '' }));
+    } catch (err) {
       setStatus('error');
+      setError(errorMessage(err, 'Something went wrong sending your message.'));
     }
   }
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <div className="mb-8">
-        <h1 className="mb-2 text-3xl font-bold text-gray-800">We're Here to Help</h1>
-        <p className="max-w-2xl text-gray-600">
-          Our support team is available to assist you with any questions or issues you may have.
-        </p>
+    <div className="space-y-6">
+      <PageHeader eyebrow="Account" title="We're here to help" subtitle={`Our affiliate team is available ${BRAND.hours}.`} />
+
+      <div className="grid gap-5 md:grid-cols-3">
+        {CHANNELS.map((c) => (
+          <a key={c.title} href={c.href} target="_blank" rel="noreferrer" className="group">
+            <Card hover className="h-full p-6">
+              <span className={cn('flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-card-hover', c.cls)}>
+                <c.icon className="h-6 w-6" />
+              </span>
+              <p className="mt-4 text-base font-extrabold text-ink-900">{c.title}</p>
+              <p className="mt-1 text-sm text-ink-500">{c.desc}</p>
+              <p className="mt-4 flex items-center gap-1.5 text-sm font-bold text-brand-600 group-hover:text-brand-700">
+                <span className="truncate">{c.label}</span>
+                <ArrowUpRight className="h-4 w-4 shrink-0 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+              </p>
+            </Card>
+          </a>
+        ))}
       </div>
 
-      <div className="mb-12 grid grid-cols-1 gap-6 md:grid-cols-3">
-        <ContactCard
-          icon={<Send className="h-7 w-7 text-blue-500" />}
-          iconBg="bg-blue-50"
-          title="Telegram Support"
-          desc="Get instant help from our team via Telegram"
-          href="https://telegram.me/G5KyZ"
-          label="Message Us"
-          hoverBorder="hover:border-l-[#0088cc]"
-        />
-        <ContactCard
-          icon={<MessageCircle className="h-7 w-7 text-green-500" />}
-          iconBg="bg-green-50"
-          title="WhatsApp Chat"
-          desc="Chat with us directly on WhatsApp"
-          href="https://wa.me/917725891584"
-          label="+91 77258 91584"
-          hoverBorder="hover:border-l-[#25D366]"
-        />
-        <ContactCard
-          icon={<Mail className="h-7 w-7 text-red-500" />}
-          iconBg="bg-red-50"
-          title="Email Support"
-          desc="Send us an email and we'll respond quickly"
-          href="mailto:support@gskloots.xyz"
-          label="support@gskloots.xyz"
-          hoverBorder="hover:border-l-[#EA4335]"
-        />
-      </div>
-
-      <div className="mb-12 overflow-hidden rounded-xl bg-white shadow-sm">
-        <div className="border-b p-6">
-          <h2 className="text-2xl font-bold text-gray-800">Frequently Asked Questions</h2>
-        </div>
-        <div className="divide-y divide-gray-100">
-          {FAQS.map((faq, i) => (
-            <div key={faq.q} className="cursor-pointer p-6 transition hover:bg-gray-50" onClick={() => setOpenFaq(openFaq === i ? null : i)}>
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium text-gray-800">{faq.q}</h3>
-                <span className={`text-gray-400 transition-transform ${openFaq === i ? 'rotate-180' : ''}`}>▾</span>
+      <div className="grid gap-6 xl:grid-cols-5">
+        <Card className="h-fit xl:col-span-2">
+          <CardHeader title="Frequently asked" />
+          <div className="divide-y divide-line">
+            {FAQS.map((faq, i) => (
+              <div key={faq.q}>
+                <button type="button" onClick={() => setOpenFaq(openFaq === i ? null : i)} className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left">
+                  <span className="text-sm font-bold text-ink-900">{faq.q}</span>
+                  <ChevronDown className={cn('h-4 w-4 shrink-0 text-ink-400 transition-transform', openFaq === i && 'rotate-180')} />
+                </button>
+                <div className={cn('grid transition-all duration-200', openFaq === i ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
+                  <p className="overflow-hidden px-5 text-sm leading-relaxed text-ink-500">
+                    <span className="block pb-4">{faq.a}</span>
+                  </p>
+                </div>
               </div>
-              {openFaq === i && <p className="mt-2 text-gray-600">{faq.a}</p>}
-            </div>
-          ))}
-        </div>
-      </div>
+            ))}
+          </div>
+        </Card>
 
-      <div className="rounded-xl bg-white p-6 shadow-sm">
-        <h2 className="mb-6 text-2xl font-bold text-gray-800">Send Us a Message</h2>
-        {status === 'sent' && (
-          <p className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">
-            Thanks! We received your message and will get back to you shortly.
-          </p>
-        )}
-        {status === 'error' && (
-          <p className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-            Something went wrong sending your message. Please try again or email us directly.
-          </p>
-        )}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Your Name</label>
-              <input
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                required
-                className="w-full rounded-lg border border-gray-300 px-4 py-2 transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-              />
+        <Card className="xl:col-span-3">
+          <CardHeader title="Send us a message" subtitle="We usually reply within one business day." icon={Clock} />
+          <form onSubmit={handleSubmit} className="space-y-4 p-5">
+            {status === 'sent' && <Alert tone="success">Thanks! We received your message and will get back to you shortly.</Alert>}
+            {status === 'error' && <Alert tone="danger">{error}</Alert>}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Your name" required>
+                <Input required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+              </Field>
+              <Field label="Email" required>
+                <Input type="email" required value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+              </Field>
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Email Address</label>
-              <input
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                required
-                className="w-full rounded-lg border border-gray-300 px-4 py-2 transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-              />
+            <Field label="Subject">
+              <Input placeholder="e.g. Payout for withdrawal WD-123" value={form.subject} onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))} />
+            </Field>
+            <Field label="Message">
+              <Textarea rows={6} placeholder="Tell us what's going on…" value={form.message} onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))} />
+            </Field>
+            <div className="flex justify-end">
+              <Button type="submit" loading={status === 'sending'} icon={Send}>
+                Send message
+              </Button>
             </div>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Subject</label>
-            <input
-              value={form.subject}
-              onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Message</label>
-            <textarea
-              rows={4}
-              value={form.message}
-              onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={status === 'sending'}
-            className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-3 font-medium text-white shadow transition hover:bg-blue-700 disabled:opacity-60 md:w-auto"
-          >
-            <Send className="h-4 w-4" />
-            {status === 'sending' ? 'Sending...' : 'Send Message'}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function ContactCard({ icon, iconBg, title, desc, href, label, hoverBorder }) {
-  return (
-    <div className={`rounded-xl border-l-4 border-l-transparent bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg ${hoverBorder}`}>
-      <div className="flex flex-col items-center text-center">
-        <div className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full ${iconBg}`}>{icon}</div>
-        <h2 className="mb-2 text-xl font-bold text-gray-800">{title}</h2>
-        <p className="mb-4 text-gray-600">{desc}</p>
-        <a
-          href={href}
-          target="_blank"
-          rel="noreferrer"
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-gray-50 py-2 font-medium text-gray-700 transition hover:bg-gray-100"
-        >
-          {label}
-        </a>
+          </form>
+        </Card>
       </div>
     </div>
   );

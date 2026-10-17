@@ -1,8 +1,14 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ArrowLeft, Mail, Send } from 'lucide-react';
 import { apiClient } from '../../api/client';
+import { usePageTitle } from '../../context/SiteContext';
+import AuthShell from '../../layouts/AuthShell';
+import { Alert, Button, Field, Input } from '../../components/ui';
+import { errorMessage } from '../../utils/format';
 
 export default function ForgotPassword() {
+  usePageTitle('Reset password');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -16,45 +22,41 @@ export default function ForgotPassword() {
       const { data } = await apiClient.post('/auth/publisher/forgot-password', { email });
       setMessage(data.message);
     } catch (err) {
-      setError(err.response?.data?.message || 'Request failed');
+      setError(errorMessage(err, 'Request failed'));
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4 rounded-xl bg-white p-8 shadow">
-        <h1 className="text-xl font-bold text-gray-800">Forgot Password</h1>
-        {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
-        {message && <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{message}</p>}
-        {!message && (
-          <>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Email</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-            >
-              {submitting ? 'Sending...' : 'Send Reset Link'}
-            </button>
-          </>
-        )}
-        <p className="text-center text-sm text-gray-500">
-          <Link to="/publisher/login" className="font-medium text-blue-600">
-            Back to login
-          </Link>
-        </p>
-      </form>
-    </div>
+    <AuthShell
+      title="Forgot your password?"
+      subtitle="Enter your account email and we'll send you a secure reset link."
+      footer={
+        <Link to="/publisher/login" className="inline-flex items-center gap-1.5 font-bold text-brand-600 hover:text-brand-700">
+          <ArrowLeft className="h-4 w-4" /> Back to sign in
+        </Link>
+      }
+    >
+      {error && (
+        <Alert tone="danger" className="mb-5">
+          {error}
+        </Alert>
+      )}
+      {message ? (
+        <Alert tone="success" title="Check your inbox">
+          {message}
+        </Alert>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Field label="Email address">
+            <Input icon={Mail} type="email" required placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </Field>
+          <Button type="submit" size="lg" className="w-full" loading={submitting} icon={Send}>
+            Send reset link
+          </Button>
+        </form>
+      )}
+    </AuthShell>
   );
 }

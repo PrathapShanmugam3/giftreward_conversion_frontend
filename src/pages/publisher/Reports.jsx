@@ -1,180 +1,393 @@
-import { useEffect, useState } from 'react';
-import { apiClient } from '../../api/client';
-import Loader from '../../components/Loader';
+import { useEffect, useMemo, useState } from 'react';
+import { CalendarRange, CheckCircle2, Columns3, Download, FileSpreadsheet, FileText, IndianRupee, MousePointerClick, Percent, RotateCcw } from 'lucide-react';
+import { apiClient, downloadFile } from '../../api/client';
+import { usePageTitle } from '../../context/SiteContext';
+import {
+  Button,
+  Card,
+  CardHeader,
+  Checkbox,
+  Field,
+  Input,
+  Modal,
+  PageHeader,
+  Pagination,
+  Segmented,
+  Select,
+  StatCard,
+  StatusBadge,
+  Table,
+  TableEmpty,
+  TableSkeleton,
+  Td,
+  Th,
+  THead,
+  Tr,
+  useToast,
+} from '../../components/ui';
+import { errorMessage, formatCurrency, formatDateTime, formatNumber, formatPercent, isoDate, monthStart } from '../../utils/format';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const COLUMNS_KEY = 'gr.reportColumns';
+// Filled in by the export only (needs a geo lookup per IP).
+const EXPORT_ONLY = new Set(['location', 'carrier_isp']);
 
+function monthEnd() {
+  const d = new Date();
+  return isoDate(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+}
+
+function deviceOf(ua = '') {
+  const s = ua.toLowerCase();
+  const kind = /ipad|tablet/.test(s) ? 'Tablet' : /mobi|android|iphone/.test(s) ? 'Mobile' : ua ? 'Desktop' : '—';
+  const os = /android/.test(s) ? 'Android' : /iphone|ipad|ios/.test(s) ? 'iOS' : /windows/.test(s) ? 'Windows' : /mac os/.test(s) ? 'macOS' : /linux/.test(s) ? 'Linux' : '';
+  return os ? `${kind} · ${os}` : kind;
+}
+
+function cellValue(row, key) {
+  switch (key) {
+    case 'click_time':
+      return formatDateTime(row.created_at);
+    case 'conv_id':
+      return row.conversion_id || '—';
+    case 'status':
+      return row.conversion_status ? <StatusBadge status={row.conversion_status} /> : <StatusBadge status="not converted" label="Not converted" />;
+    case 'payout':
+      return row.conversion_payout != null ? <span className="font-bold text-emerald-600">{formatCurrency(row.conversion_payout)}</span> : '—';
+    case 'device':
+      return deviceOf(row.user_agent);
+    case 'click_id':
+      return <span className="font-mono text-xs">{row.click_id}</span>;
+    default:
+      return row[key] || '—';
+  }
+}
+
+// publisher/reports.php (+ export.php): daily / monthly / custom summary,
+// paginated click-level report with column visibility, CSV / Excel / PDF.
 export default function PublisherReports() {
+  usePageTitle('Reports');
+  const toast = useToast();
+  const today = isoDate();
   const [type, setType] = useState('daily');
-  const [dateFrom, setDateFrom] = useState(today());
-  const [dateTo, setDateTo] = useState(today());
-  const [offerId, setOfferId] = useState('');
-  const [status, setStatus] = useState('all');
+  const [filters, setFilters] = useState({ dateFrom: today, dateTo: today, offerId: '', status: 'all' });
+  const [applied, setApplied] = useState(filters);
   const [offers, setOffers] = useState([]);
   const [summary, setSummary] = useState(null);
   const [detailed, setDetailed] = useState(null);
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(25);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState('');
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const [labels, setLabels] = useState({});
+  const [visible, setVisible] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(COLUMNS_KEY)) || null;
+    } catch {
+      return null;
+    }
+  });
 
   useEffect(() => {
     apiClient.get('/publisher/offers').then(({ data }) => setOffers(data.offers));
   }, []);
 
-  async function load() {
-    setLoading(true);
-    try {
-      const [summaryRes, detailedRes] = await Promise.all([
-        apiClient.get('/publisher/reports/summary', { params: { type, dateFrom, dateTo, offerId: offerId || undefined, status } }),
-        apiClient.get('/publisher/reports/detailed', { params: { dateFrom, dateTo, offerId: offerId || undefined, status, page, perPage: 10 } }),
-      ]);
-      setSummary(summaryRes.data);
-      setDetailed(detailedRes.data);
-    } finally {
-      setLoading(false);
-    }
+  // Monthly summaries always cover the current calendar month (backend
+  // rule), so pin the date range to match.
+  function changeType(t) {
+    setType(t);
+    let next = filters;
+    if (t === 'monthly') next = { ...filters, dateFrom: monthStart(), dateTo: monthEnd() };
+    if (t === 'daily') next = { ...filters, dateFrom: today, dateTo: today };
+    setFilters(next);
+    setApplied(next);
+    setPage(1);
   }
 
   useEffect(() => {
-    load();
+    let cancelled = false;
+    setLoading(true);
+    const params = { dateFrom: applied.dateFrom, dateTo: applied.dateTo, offerId: applied.offerId || undefined, status: applied.status };
+    Promise.all([
+      apiClient.get('/publisher/reports/summary', { params: { ...params, type } }),
+      apiClient.get('/publisher/reports/detailed', { params: { ...params, page, perPage } }),
+    ])
+      .then(([s, d]) => {
+        if (cancelled) return;
+        setSummary(s.data);
+        setDetailed(d.data);
+        setLabels(d.data.columnLabels || {});
+        setVisible((v) => v || d.data.defaultVisibleColumns || {});
+      })
+      .catch((err) => toast.error(errorMessage(err, 'Failed to load report')))
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type, page]);
+  }, [type, applied, page, perPage]);
 
-  function applyFilters(e) {
+  const shownColumns = useMemo(() => Object.keys(labels).filter((k) => visible?.[k] && !EXPORT_ONLY.has(k)), [labels, visible]);
+
+  function apply(e) {
     e.preventDefault();
     setPage(1);
-    load();
+    setApplied(filters);
   }
 
-  function exportUrl(format) {
-    const params = new URLSearchParams({ format, dateFrom, dateTo });
-    if (offerId) params.set('offerId', offerId);
-    if (status !== 'all') params.set('status', status);
-    return `/api/publisher/reports/export?${params.toString()}`;
+  function saveColumns(next) {
+    setVisible(next);
+    try {
+      localStorage.setItem(COLUMNS_KEY, JSON.stringify(next));
+    } catch {
+      /* private mode — keep in memory only */
+    }
   }
+
+  async function exportAs(format) {
+    setExporting(format);
+    try {
+      await downloadFile(
+        '/publisher/reports/export',
+        {
+          format,
+          dateFrom: applied.dateFrom,
+          dateTo: applied.dateTo,
+          offerId: applied.offerId || undefined,
+          status: applied.status !== 'all' ? applied.status : undefined,
+          columns: JSON.stringify(visible || {}),
+        },
+        `report.${format === 'excel' ? 'xlsx' : format}`
+      );
+    } catch (err) {
+      toast.error(errorMessage(err, 'Export failed'));
+    } finally {
+      setExporting('');
+    }
+  }
+
+  const totals = summary?.totals || { clicks: 0, conversions: 0, revenue: 0 };
+  const cr = totals.clicks ? (totals.conversions / totals.clicks) * 100 : 0;
 
   return (
-    <div>
-      <h1 className="mb-4 text-xl font-bold text-gray-800">Reports</h1>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Performance"
+        title="Reports"
+        subtitle="Every click you've sent, joined with its conversion — filter, slice and export."
+        actions={
+          <>
+            <Button variant="secondary" size="sm" icon={FileText} loading={exporting === 'csv'} onClick={() => exportAs('csv')}>
+              CSV
+            </Button>
+            <Button variant="secondary" size="sm" icon={FileSpreadsheet} loading={exporting === 'excel'} onClick={() => exportAs('excel')}>
+              Excel
+            </Button>
+            <Button variant="secondary" size="sm" icon={Download} loading={exporting === 'pdf'} onClick={() => exportAs('pdf')}>
+              PDF
+            </Button>
+          </>
+        }
+      />
 
-      <div className="mb-4 flex gap-2">
-        {['daily', 'monthly', 'custom'].map((t) => (
-          <button
-            key={t}
-            onClick={() => setType(t)}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize ${
-              type === t ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
+      <Card className="p-4">
+        <div className="mb-4">
+          <Segmented
+            value={type}
+            onChange={changeType}
+            options={[
+              { value: 'daily', label: 'Daily' },
+              { value: 'monthly', label: 'This month' },
+              { value: 'custom', label: 'Custom range' },
+            ]}
+          />
+        </div>
+        <form onSubmit={apply} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.4fr_1fr_auto]">
+          <Field label="From">
+            <Input type="date" value={filters.dateFrom} disabled={type === 'monthly'} onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))} />
+          </Field>
+          <Field label="To">
+            <Input type="date" value={filters.dateTo} disabled={type === 'monthly'} onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))} />
+          </Field>
+          <Field label="Offer">
+            <Select value={filters.offerId} onChange={(e) => setFilters((f) => ({ ...f, offerId: e.target.value }))}>
+              <option value="">All offers</option>
+              {offers.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Status">
+            <Select value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
+              <option value="all">All clicks</option>
+              <option value="converted">Converted</option>
+              <option value="not_converted">Not converted</option>
+              <option value="approved">Approved</option>
+              <option value="pending">Pending</option>
+              <option value="rejected">Rejected</option>
+            </Select>
+          </Field>
+          <div className="flex items-end gap-2">
+            <Button type="submit" icon={CalendarRange} className="flex-1 lg:flex-none">
+              Apply
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              icon={RotateCcw}
+              aria-label="Reset filters"
+              onClick={() => {
+                const reset = { dateFrom: today, dateTo: today, offerId: '', status: 'all' };
+                setType('daily');
+                setFilters(reset);
+                setApplied(reset);
+                setPage(1);
+              }}
+            />
+          </div>
+        </form>
+      </Card>
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Clicks" value={formatNumber(totals.clicks)} icon={MousePointerClick} tone="info" loading={loading && !summary} />
+        <StatCard label="Conversions" value={formatNumber(totals.conversions)} icon={CheckCircle2} tone="success" loading={loading && !summary} />
+        <StatCard label="Conversion rate" value={formatPercent(cr)} icon={Percent} tone="warning" loading={loading && !summary} />
+        <StatCard label="Approved earnings" value={formatCurrency(totals.revenue)} icon={IndianRupee} tone="brand" loading={loading && !summary} />
       </div>
 
-      <form onSubmit={applyFilters} className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-gray-200 bg-white p-4">
-        <Field label="From">
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
-        </Field>
-        <Field label="To">
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
-        </Field>
-        <Field label="Offer">
-          <select value={offerId} onChange={(e) => setOfferId(e.target.value)} className="rounded-md border border-gray-300 px-2 py-1.5 text-sm">
-            <option value="">All offers</option>
-            {offers.map((o) => (
-              <option key={o.id} value={o.id}>{o.name}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Status">
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-md border border-gray-300 px-2 py-1.5 text-sm">
-            <option value="all">All</option>
-            <option value="converted">Converted</option>
-            <option value="not_converted">Not converted</option>
-            <option value="approved">Approved</option>
-            <option value="pending">Pending</option>
-            <option value="rejected">Rejected</option>
-          </select>
-        </Field>
-        <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white">
-          Apply
-        </button>
-        <div className="ml-auto flex gap-2">
-          <a href={exportUrl('csv')} className="rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700">CSV</a>
-          <a href={exportUrl('excel')} className="rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700">Excel</a>
-          <a href={exportUrl('pdf')} className="rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700">PDF</a>
-        </div>
-      </form>
+      <Card>
+        <CardHeader title={type === 'monthly' ? 'Monthly summary' : 'Daily summary'} subtitle={`${summary?.range ? `${String(summary.range.from).slice(0, 10)} → ${String(summary.range.to).slice(0, 10)}` : ''}`} />
+        <Table minWidth={480}>
+          <THead>
+            <tr>
+              <Th>Period</Th>
+              <Th align="right">Clicks</Th>
+              <Th align="right">Conversions</Th>
+              <Th align="right">CR</Th>
+              <Th align="right">Earnings</Th>
+            </tr>
+          </THead>
+          <tbody>
+            {loading && !summary ? (
+              <TableSkeleton rows={3} cols={5} />
+            ) : summary?.rows.length ? (
+              summary.rows.map((r) => (
+                <Tr key={r.date}>
+                  <Td className="font-semibold text-ink-900">{r.date}</Td>
+                  <Td align="right" className="tabular-nums">{formatNumber(r.clicks)}</Td>
+                  <Td align="right" className="tabular-nums">{formatNumber(r.conversions)}</Td>
+                  <Td align="right" className="tabular-nums">{formatPercent(r.clicks ? (r.conversions / r.clicks) * 100 : 0)}</Td>
+                  <Td align="right" className="font-bold text-emerald-600 tabular-nums">{formatCurrency(r.revenue)}</Td>
+                </Tr>
+              ))
+            ) : (
+              <TableEmpty colSpan={5} title="No traffic in this range" description="Pick a wider date range or another offer." />
+            )}
+          </tbody>
+        </Table>
+      </Card>
 
-      {loading && <Loader />}
-
-      {!loading && summary && (
-        <div className="mb-6 grid grid-cols-3 gap-3">
-          <StatCard label="Clicks" value={summary.totals.clicks} />
-          <StatCard label="Conversions" value={summary.totals.conversions} />
-          <StatCard label="Revenue" value={`₹${Number(summary.totals.revenue).toFixed(2)}`} />
-        </div>
-      )}
-
-      {!loading && detailed && (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-3 py-2 text-left font-medium text-gray-500">Click ID</th>
-                <th className="px-3 py-2 text-left font-medium text-gray-500">Offer ID</th>
-                <th className="px-3 py-2 text-left font-medium text-gray-500">Click Time</th>
-                <th className="px-3 py-2 text-left font-medium text-gray-500">Status</th>
-                <th className="px-3 py-2 text-left font-medium text-gray-500">Payout</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {detailed.rows.map((r) => (
-                <tr key={r.id}>
-                  <td className="px-3 py-2 font-mono text-xs">{r.click_id}</td>
-                  <td className="px-3 py-2">{r.offer_id}</td>
-                  <td className="px-3 py-2 text-gray-500">{new Date(r.created_at).toLocaleString()}</td>
-                  <td className="px-3 py-2">{r.conversion_status || '—'}</td>
-                  <td className="px-3 py-2">{r.conversion_payout != null ? `₹${r.conversion_payout}` : '—'}</td>
-                </tr>
+      <Card>
+        <CardHeader
+          title="Click-level report"
+          subtitle={detailed ? `${formatNumber(detailed.total)} clicks` : ''}
+          actions={
+            <>
+              <Select value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }} className="w-28">
+                {[10, 25, 50, 100].map((n) => (
+                  <option key={n} value={n}>
+                    {n} / page
+                  </option>
+                ))}
+              </Select>
+              <Button size="sm" variant="secondary" icon={Columns3} onClick={() => setColumnsOpen(true)}>
+                Columns
+              </Button>
+            </>
+          }
+        />
+        <Table minWidth={Math.max(720, shownColumns.length * 120)}>
+          <THead>
+            <tr>
+              {shownColumns.map((k) => (
+                <Th key={k}>{labels[k]}</Th>
               ))}
-              {detailed.rows.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-500">No data found.</td></tr>
-              )}
-            </tbody>
-          </table>
-          {detailed.totalPages > 1 && (
-            <div className="flex justify-center gap-1 border-t border-gray-100 py-3">
-              {Array.from({ length: detailed.totalPages }, (_, i) => i + 1).slice(0, 10).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPage(p)}
-                  className={`rounded-md px-3 py-1 text-sm ${p === page ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+            </tr>
+          </THead>
+          <tbody>
+            {loading ? (
+              <TableSkeleton rows={6} cols={shownColumns.length || 6} />
+            ) : detailed?.rows.length ? (
+              detailed.rows.map((r) => (
+                <Tr key={r.id}>
+                  {shownColumns.map((k) => (
+                    <Td key={k} className="whitespace-nowrap">
+                      {cellValue(r, k)}
+                    </Td>
+                  ))}
+                </Tr>
+              ))
+            ) : (
+              <TableEmpty colSpan={shownColumns.length || 1} title="No clicks found" description="Clicks on your tracking links appear here within seconds." />
+            )}
+          </tbody>
+        </Table>
+        {detailed && <Pagination page={page} totalPages={detailed.totalPages} total={detailed.total} onChange={setPage} />}
+      </Card>
+
+      {columnsOpen && (
+        <ColumnsModal
+          labels={labels}
+          visible={visible || {}}
+          onClose={() => setColumnsOpen(false)}
+          onSave={(next) => {
+            saveColumns(next);
+            setColumnsOpen(false);
+          }}
+        />
       )}
     </div>
   );
 }
 
-function Field({ label, children }) {
+function ColumnsModal({ labels, visible, onClose, onSave }) {
+  const [draft, setDraft] = useState(visible);
+  const keys = Object.keys(labels);
   return (
-    <div>
-      <label className="mb-1 block text-xs font-medium text-gray-500">{label}</label>
-      {children}
-    </div>
-  );
-}
-
-function StatCard({ label, value }) {
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <div className="text-xs text-gray-500">{label}</div>
-      <div className="mt-1 text-2xl font-bold text-gray-800">{value}</div>
-    </div>
+    <Modal
+      title="Choose columns"
+      description="Applies to the table and to CSV / Excel / PDF exports."
+      icon={Columns3}
+      size="lg"
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={() => onSave(draft)}>Save columns</Button>
+        </>
+      }
+    >
+      <div className="mb-4 flex gap-2">
+        <Button size="xs" variant="soft" onClick={() => setDraft(Object.fromEntries(keys.map((k) => [k, true])))}>
+          Select all
+        </Button>
+        <Button size="xs" variant="ghost" onClick={() => setDraft({ click_id: true })}>
+          Clear
+        </Button>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {keys.map((k) => (
+          <label key={k} className="flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-ink-700 ring-1 ring-line transition hover:bg-slate-50">
+            <Checkbox checked={!!draft[k]} onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.checked }))} />
+            <span className="truncate">{labels[k]}</span>
+            {EXPORT_ONLY.has(k) && <span className="ml-auto text-[10px] font-semibold text-ink-400">export</span>}
+          </label>
+        ))}
+      </div>
+    </Modal>
   );
 }

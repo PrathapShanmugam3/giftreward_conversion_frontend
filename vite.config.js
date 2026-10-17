@@ -26,7 +26,6 @@ export default defineConfig({
       '/go': { target: 'http://localhost:5000', changeOrigin: true },
       '/postback': { target: 'http://localhost:5000', changeOrigin: true },
       '/report': { target: 'http://localhost:5000', changeOrigin: true },
-      '/tracking': { target: 'http://localhost:5000', changeOrigin: true },
     },
   },
 })

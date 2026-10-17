@@ -1,163 +1,213 @@
 import { useEffect, useState } from 'react';
+import { Check, CheckCircle2, Clock, Inbox, Search, Trash2, X, XCircle } from 'lucide-react';
 import { apiClient } from '../../api/client';
+import { usePageTitle } from '../../context/SiteContext';
+import {
+  Avatar,
+  Button,
+  Card,
+  Checkbox,
+  Input,
+  PageHeader,
+  Segmented,
+  Select,
+  StatCard,
+  StatusBadge,
+  Table,
+  TableEmpty,
+  TableSkeleton,
+  Td,
+  Th,
+  THead,
+  Tr,
+  useConfirm,
+  useToast,
+} from '../../components/ui';
+import { errorMessage, formatDateTime, formatNumber } from '../../utils/format';
 
-const STATUS_BADGE = {
-  requested: 'bg-admin-warning text-admin-dark',
-  approved: 'bg-admin-success text-white',
-  rejected: 'bg-admin-danger text-white',
-};
-
+// sadmin/approve_ofr.php: users_offers moderation with stats, filters
+// (status / offer / search) and single + bulk approve / reject / delete.
 export default function OfferRequests() {
-  const [requests, setRequests] = useState([]);
+  usePageTitle('Offer requests');
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [requests, setRequests] = useState(null);
   const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
-  const [status, setStatus] = useState('all');
+  const [offers, setOffers] = useState([]);
+  const [status, setStatus] = useState('requested');
+  const [offerId, setOfferId] = useState('');
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(new Set());
-  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiClient.get('/admin/offers', { params: { limit: 100 } }).then(({ data }) => setOffers(data.offers));
+  }, []);
 
   async function load() {
-    setLoading(true);
-    try {
-      const { data } = await apiClient.get('/admin/offers/requests/list', { params: { status } });
-      setRequests(data.requests);
-      setStats(data.stats);
-      setSelected(new Set());
-    } finally {
-      setLoading(false);
-    }
+    const { data } = await apiClient.get('/admin/offers/requests/list', { params: { status, offerId: offerId || undefined, search: query || undefined } });
+    setRequests(data.requests);
+    setStats(data.stats);
+    setSelected(new Set());
   }
 
   useEffect(() => {
+    setRequests(null);
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [status, offerId, query]);
 
   async function moderate(id, action) {
-    await apiClient.post(`/admin/offers/requests/${id}/moderate`, { action });
-    await load();
+    try {
+      const { data } = await apiClient.post(`/admin/offers/requests/${id}/moderate`, { action });
+      toast.success(data.message);
+      await load();
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
   }
 
-  async function bulkModerate(action) {
+  async function bulk(action) {
     if (selected.size === 0) return;
-    await apiClient.post('/admin/offers/requests/bulk-moderate', { action, requestIds: Array.from(selected) });
-    await load();
+    if (action === 'delete_selected' && !(await confirm({ title: `Delete ${selected.size} request(s)?`, message: 'Publishers will lose any access these requests granted.', confirmLabel: 'Delete' }))) return;
+    try {
+      const { data } = await apiClient.post('/admin/offers/requests/bulk-moderate', { action, requestIds: [...selected] });
+      toast.success(data.message || 'Bulk action applied');
+      await load();
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
   }
 
-  function toggle(id) {
+  const toggle = (id) =>
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  }
+  const allSelected = requests?.length > 0 && requests.every((r) => selected.has(r.id));
 
   return (
-    <div className="admin-theme">
-      <h1 className="mb-4 text-xl font-bold text-admin-dark">Offer Requests</h1>
+    <div className="space-y-6">
+      <PageHeader eyebrow="Catalogue" title="Offer access requests" subtitle="Approve which publishers can run approval-only offers." />
 
-      <div className="mb-4 grid grid-cols-4 gap-3">
-        <StatCard label="Total" value={stats.total} variant="primary" />
-        <StatCard label="Pending" value={stats.pending} variant="warning" />
-        <StatCard label="Approved" value={stats.approved} variant="success" />
-        <StatCard label="Rejected" value={stats.rejected} variant="danger" />
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Total requests" value={formatNumber(stats.total)} icon={Inbox} tone="brand" />
+        <StatCard label="Pending" value={formatNumber(stats.pending)} icon={Clock} tone="warning" />
+        <StatCard label="Approved" value={formatNumber(stats.approved)} icon={CheckCircle2} tone="success" />
+        <StatCard label="Rejected" value={formatNumber(stats.rejected)} icon={XCircle} tone="danger" />
       </div>
 
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex gap-2">
-          {['all', 'requested', 'approved', 'rejected'].map((s) => (
-            <button
-              key={s}
-              onClick={() => setStatus(s)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
-                status === s ? 'bg-admin-primary text-white' : 'bg-gray-100 text-gray-700'
-              }`}
+      <Card>
+        <div className="flex flex-col gap-3 border-b border-line p-4 lg:flex-row lg:items-center lg:justify-between">
+          <Segmented
+            value={status}
+            onChange={setStatus}
+            options={[
+              { value: 'requested', label: 'Pending', count: stats.pending },
+              { value: 'approved', label: 'Approved' },
+              { value: 'rejected', label: 'Rejected' },
+              { value: 'all', label: 'All' },
+            ]}
+          />
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Select value={offerId} onChange={(e) => setOfferId(e.target.value)} className="sm:w-52">
+              <option value="">All offers</option>
+              {offers.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </Select>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                setQuery(search.trim());
+              }}
             >
-              {s}
-            </button>
-          ))}
+              <Input icon={Search} placeholder="Publisher name, email, company…" value={search} onChange={(e) => setSearch(e.target.value)} className="sm:w-72" />
+            </form>
+          </div>
         </div>
+
         {selected.size > 0 && (
-          <div className="flex gap-2">
-            <button onClick={() => bulkModerate('approve_selected')} className="rounded-lg bg-admin-success px-3 py-1.5 text-sm text-white">
-              Approve ({selected.size})
-            </button>
-            <button onClick={() => bulkModerate('reject_selected')} className="rounded-lg bg-admin-danger px-3 py-1.5 text-sm text-white">
-              Reject ({selected.size})
-            </button>
+          <div className="flex flex-wrap items-center gap-2 border-b border-line bg-brand-50/60 px-4 py-2.5">
+            <span className="mr-2 text-sm font-bold text-brand-800">{selected.size} selected</span>
+            <Button size="sm" variant="success" icon={Check} onClick={() => bulk('approve_selected')}>
+              Approve
+            </Button>
+            <Button size="sm" variant="danger-soft" icon={X} onClick={() => bulk('reject_selected')}>
+              Reject
+            </Button>
+            <Button size="sm" variant="ghost" icon={Trash2} onClick={() => bulk('delete_selected')}>
+              Delete
+            </Button>
           </div>
         )}
-      </div>
 
-      <div className="overflow-x-auto rounded-admin bg-white shadow-admin-card">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-[#f8fafc]">
+        <Table minWidth={860}>
+          <THead>
             <tr>
-              <th className="px-3 py-3" />
-              <th className="px-3 py-3 text-left font-semibold text-admin-dark">Publisher</th>
-              <th className="px-3 py-3 text-left font-semibold text-admin-dark">Offer</th>
-              <th className="px-3 py-3 text-left font-semibold text-admin-dark">Status</th>
-              <th className="px-3 py-3 text-left font-semibold text-admin-dark">Requested</th>
-              <th className="px-3 py-3 text-right font-semibold text-admin-dark">Actions</th>
+              <Th className="w-10">
+                <Checkbox checked={allSelected} onChange={() => setSelected(allSelected ? new Set() : new Set(requests.map((r) => r.id)))} aria-label="Select all" />
+              </Th>
+              <Th>Publisher</Th>
+              <Th>Offer</Th>
+              <Th>Status</Th>
+              <Th>Requested</Th>
+              <Th align="right">Actions</Th>
             </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {requests.map((req) => (
-              <tr key={req.id}>
-                <td className="px-3 py-3">
-                  <input type="checkbox" checked={selected.has(req.id)} onChange={() => toggle(req.id)} />
-                </td>
-                <td className="px-3 py-3">
-                  <div className="font-medium text-gray-800">{req.User?.name}</div>
-                  <div className="text-xs text-gray-500">{req.User?.email}</div>
-                </td>
-                <td className="px-3 py-3 text-gray-700">{req.Offer?.name}</td>
-                <td className="px-3 py-3">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[req.status]}`}>{req.status}</span>
-                </td>
-                <td className="px-3 py-3 text-gray-500">{new Date(req.requestedAt).toLocaleString()}</td>
-                <td className="px-3 py-3 text-right">
-                  {req.status === 'requested' && (
-                    <>
-                      <button onClick={() => moderate(req.id, 'approve')} className="mr-2 font-medium text-admin-success">
+          </THead>
+          <tbody>
+            {!requests ? (
+              <TableSkeleton rows={5} cols={6} />
+            ) : requests.length === 0 ? (
+              <TableEmpty colSpan={6} title="No requests here" description="Nothing matches these filters right now." />
+            ) : (
+              requests.map((req) => (
+                <Tr key={req.id} selected={selected.has(req.id)}>
+                  <Td>
+                    <Checkbox checked={selected.has(req.id)} onChange={() => toggle(req.id)} aria-label="Select request" />
+                  </Td>
+                  <Td>
+                    <div className="flex items-center gap-3">
+                      <Avatar name={req.User?.name || '?'} size="sm" />
+                      <div className="min-w-0">
+                        <p className="truncate font-bold text-ink-900">{req.User?.name}</p>
+                        <p className="truncate text-xs text-ink-500">{req.User?.email}</p>
+                      </div>
+                    </div>
+                  </Td>
+                  <Td>
+                    <p className="font-semibold text-ink-900">{req.Offer?.name}</p>
+                    <p className="text-xs text-ink-500">
+                      {req.Offer?.payoutType} · {req.Offer?.category || 'General'}
+                    </p>
+                  </Td>
+                  <Td>
+                    <StatusBadge status={req.status} />
+                  </Td>
+                  <Td className="whitespace-nowrap text-ink-500">{formatDateTime(req.requestedAt)}</Td>
+                  <Td align="right" className="whitespace-nowrap">
+                    {req.status !== 'approved' && (
+                      <Button size="xs" variant="success-soft" icon={Check} onClick={() => moderate(req.id, 'approve')}>
                         Approve
-                      </button>
-                      <button onClick={() => moderate(req.id, 'reject')} className="mr-2 font-medium text-admin-danger">
+                      </Button>
+                    )}
+                    {req.status !== 'rejected' && (
+                      <Button size="xs" variant="danger-soft" icon={X} className="ml-1" onClick={() => moderate(req.id, 'reject')}>
                         Reject
-                      </button>
-                    </>
-                  )}
-                  <button onClick={() => moderate(req.id, 'delete')} className="font-medium text-admin-gray">
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {!loading && requests.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-500">
-                  No requests found.
-                </td>
-              </tr>
+                      </Button>
+                    )}
+                    <Button size="icon-sm" variant="ghost" className="ml-1 hover:text-rose-600" icon={Trash2} onClick={() => moderate(req.id, 'delete')} aria-label="Delete request" />
+                  </Td>
+                </Tr>
+              ))
             )}
           </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-const STAT_BORDER = {
-  primary: 'border-l-admin-primary bg-admin-primary/10',
-  success: 'border-l-admin-success bg-admin-success/10',
-  warning: 'border-l-admin-warning bg-admin-warning/10',
-  danger: 'border-l-admin-danger bg-admin-danger/10',
-};
-
-function StatCard({ label, value, variant = 'primary' }) {
-  return (
-    <div className={`rounded-admin border-l-4 bg-white p-4 shadow-admin-card ${STAT_BORDER[variant]}`}>
-      <div className="text-xs text-admin-gray">{label}</div>
-      <div className="mt-1 text-2xl font-bold text-admin-dark">{value}</div>
+        </Table>
+      </Card>
     </div>
   );
 }

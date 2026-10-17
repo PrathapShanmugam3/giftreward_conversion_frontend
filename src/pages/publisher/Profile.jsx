@@ -1,101 +1,157 @@
 import { useEffect, useState } from 'react';
+import { BookOpen, Building2, KeyRound, Lock, Mail, Phone, Save, ShieldCheck, User } from 'lucide-react';
 import { apiClient } from '../../api/client';
-import Loader from '../../components/Loader';
+import { usePublisherAuth } from '../../context/AuthContext';
+import { usePageTitle } from '../../context/SiteContext';
+import { Alert, Avatar, Button, Card, CardHeader, Field, Input, PageHeader, PageSkeleton, StatusBadge } from '../../components/ui';
+import { errorMessage, formatCurrency, formatDate } from '../../utils/format';
 
+// publisher/profile.php: edit details (unique email) and change password,
+// which requires the current password (min 8 chars for the new one).
 export default function PublisherProfile() {
+  usePageTitle('Profile');
+  const { updateUser } = usePublisherAuth();
   const [form, setForm] = useState(null);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [profile, setProfile] = useState(null);
+  const [pw, setPw] = useState({ currentPassword: '', newPassword: '', confirm: '' });
+  const [detailsMsg, setDetailsMsg] = useState(null);
+  const [pwMsg, setPwMsg] = useState(null);
+  const [savingDetails, setSavingDetails] = useState(false);
+  const [savingPw, setSavingPw] = useState(false);
 
   useEffect(() => {
-    apiClient.get('/publisher/profile').then(({ data }) => setForm(data.user));
+    apiClient.get('/publisher/profile').then(({ data }) => {
+      setProfile(data.user);
+      setForm({ name: data.user.name, email: data.user.email, companyName: data.user.companyName, contactNumber: data.user.contactNumber });
+    });
   }, []);
 
-  function update(field) {
-    return (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
-  }
+  const update = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
-  async function handleSubmit(e) {
+  async function saveDetails(e) {
     e.preventDefault();
-    setError('');
-    setMessage('');
-    setSubmitting(true);
+    setDetailsMsg(null);
+    setSavingDetails(true);
     try {
-      const payload = {
-        name: form.name,
-        email: form.email,
-        companyName: form.companyName,
-        contactNumber: form.contactNumber,
-      };
-      if (newPassword) {
-        payload.currentPassword = currentPassword;
-        payload.newPassword = newPassword;
-      }
-      await apiClient.put('/publisher/profile', payload);
-      setMessage('Profile updated successfully!');
-      setCurrentPassword('');
-      setNewPassword('');
+      const { data } = await apiClient.put('/publisher/profile', form);
+      setProfile(data.user);
+      updateUser({ name: data.user.name, email: data.user.email });
+      setDetailsMsg({ tone: 'success', text: 'Profile updated successfully.' });
     } catch (err) {
-      setError(err.response?.data?.message || err.response?.data?.details?.[0]?.msg || 'Update failed');
+      setDetailsMsg({ tone: 'danger', text: errorMessage(err, 'Update failed') });
     } finally {
-      setSubmitting(false);
+      setSavingDetails(false);
     }
   }
 
-  if (!form) return <Loader />;
+  async function savePassword(e) {
+    e.preventDefault();
+    setPwMsg(null);
+    if (pw.newPassword !== pw.confirm) {
+      setPwMsg({ tone: 'danger', text: 'New passwords do not match.' });
+      return;
+    }
+    setSavingPw(true);
+    try {
+      await apiClient.put('/publisher/profile', { ...form, currentPassword: pw.currentPassword, newPassword: pw.newPassword });
+      setPw({ currentPassword: '', newPassword: '', confirm: '' });
+      setPwMsg({ tone: 'success', text: 'Password changed. Use it next time you sign in.' });
+    } catch (err) {
+      setPwMsg({ tone: 'danger', text: errorMessage(err, 'Password change failed') });
+    } finally {
+      setSavingPw(false);
+    }
+  }
+
+  if (!form) return <PageSkeleton />;
 
   return (
     <div>
-      <h1 className="mb-4 text-xl font-bold text-gray-800">Profile</h1>
-      {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
-      {message && <p className="mb-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{message}</p>}
+      <PageHeader eyebrow="Account" title="Profile settings" subtitle="Keep your contact details current so payouts and notices reach you." />
 
-      <form onSubmit={handleSubmit} className="max-w-lg space-y-4 rounded-xl border border-gray-200 bg-white p-6">
-        <Field label="Name" value={form.name} onChange={update('name')} />
-        <Field label="Email" type="email" value={form.email} onChange={update('email')} />
-        <Field label="Company Name" value={form.companyName} onChange={update('companyName')} />
-        <Field label="Contact Number" value={form.contactNumber} onChange={update('contactNumber')} />
-
-        <div className="border-t border-gray-100 pt-4">
-          <p className="mb-2 text-sm font-medium text-gray-700">Change Password (optional)</p>
-          <div className="space-y-3">
-            <input
-              type="password"
-              placeholder="Current password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              type="password"
-              placeholder="New password (min 8 characters)"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            />
+      <div className="grid gap-6 xl:grid-cols-3">
+        <Card className="h-fit overflow-hidden">
+          <div className="h-24 bg-gradient-to-br from-brand-600 via-brand-500 to-accent-600" />
+          <div className="-mt-10 px-6 pb-6 text-center">
+            <Avatar name={profile.name} size="lg" className="mx-auto h-20 w-20 text-2xl ring-4" />
+            <p className="mt-3 text-lg font-extrabold text-ink-900">{profile.name}</p>
+            <p className="text-sm text-ink-500">{profile.email}</p>
+            <div className="mt-3 flex justify-center">
+              <StatusBadge status={profile.status ? 'active' : 'locked'} label={profile.status ? 'Active account' : 'Locked'} />
+            </div>
+            <dl className="mt-6 divide-y divide-line rounded-2xl text-left ring-1 ring-line">
+              <div className="flex justify-between px-4 py-3 text-sm">
+                <dt className="text-ink-500">Publisher ID</dt>
+                <dd className="font-mono font-bold text-ink-900">#{profile.id}</dd>
+              </div>
+              <div className="flex justify-between px-4 py-3 text-sm">
+                <dt className="text-ink-500">Wallet</dt>
+                <dd className="font-bold text-emerald-600 tabular-nums">{formatCurrency(profile.walletBalance)}</dd>
+              </div>
+              {profile.createdAt && (
+                <div className="flex justify-between px-4 py-3 text-sm">
+                  <dt className="text-ink-500">Member since</dt>
+                  <dd className="font-semibold text-ink-900">{formatDate(profile.createdAt)}</dd>
+                </div>
+              )}
+            </dl>
+            <Button to="/publisher/api-documentation" variant="soft" className="mt-4 w-full" icon={BookOpen}>
+              API key & docs
+            </Button>
           </div>
+        </Card>
+
+        <div className="space-y-6 xl:col-span-2">
+          <Card>
+            <CardHeader title="Personal details" icon={User} />
+            <form onSubmit={saveDetails} className="space-y-4 p-5">
+              {detailsMsg && <Alert tone={detailsMsg.tone}>{detailsMsg.text}</Alert>}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Full name" required>
+                  <Input icon={User} required value={form.name} onChange={update('name')} />
+                </Field>
+                <Field label="Email" required>
+                  <Input icon={Mail} type="email" required value={form.email} onChange={update('email')} />
+                </Field>
+                <Field label="Company" required>
+                  <Input icon={Building2} required value={form.companyName} onChange={update('companyName')} />
+                </Field>
+                <Field label="Contact number" required>
+                  <Input icon={Phone} required value={form.contactNumber} onChange={update('contactNumber')} />
+                </Field>
+              </div>
+              <div className="flex justify-end">
+                <Button type="submit" loading={savingDetails} icon={Save}>
+                  Save details
+                </Button>
+              </div>
+            </form>
+          </Card>
+
+          <Card>
+            <CardHeader title="Change password" subtitle="You'll need your current password." icon={ShieldCheck} />
+            <form onSubmit={savePassword} className="space-y-4 p-5">
+              {pwMsg && <Alert tone={pwMsg.tone}>{pwMsg.text}</Alert>}
+              <Field label="Current password" required>
+                <Input icon={Lock} type="password" required autoComplete="current-password" value={pw.currentPassword} onChange={(e) => setPw((p) => ({ ...p, currentPassword: e.target.value }))} />
+              </Field>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="New password" required hint="At least 8 characters.">
+                  <Input icon={KeyRound} type="password" required minLength={8} autoComplete="new-password" value={pw.newPassword} onChange={(e) => setPw((p) => ({ ...p, newPassword: e.target.value }))} />
+                </Field>
+                <Field label="Confirm new password" required>
+                  <Input icon={KeyRound} type="password" required minLength={8} autoComplete="new-password" value={pw.confirm} onChange={(e) => setPw((p) => ({ ...p, confirm: e.target.value }))} />
+                </Field>
+              </div>
+              <div className="flex justify-end">
+                <Button type="submit" variant="dark" loading={savingPw} icon={ShieldCheck}>
+                  Update password
+                </Button>
+              </div>
+            </form>
+          </Card>
         </div>
-
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-        >
-          {submitting ? 'Saving...' : 'Save Changes'}
-        </button>
-      </form>
-    </div>
-  );
-}
-
-function Field({ label, type = 'text', value, onChange }) {
-  return (
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
-      <input type={type} required value={value} onChange={onChange} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
+      </div>
     </div>
   );
 }

@@ -1,16 +1,23 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowRight, Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { apiClient } from '../../api/client';
 import { usePublisherAuth } from '../../context/AuthContext';
+import { usePageTitle } from '../../context/SiteContext';
+import AuthShell from '../../layouts/AuthShell';
+import Recaptcha from '../../components/Recaptcha';
+import { Alert, Button, Field, Input } from '../../components/ui';
+import { errorMessage } from '../../utils/format';
 
-// Full reCAPTCHA + lockout UX lands in Phase 1 along with the backend auth
-// routes. This is the real page skeleton wired to the (not-yet-built)
-// /api/auth/publisher/login endpoint so the plumbing can be exercised early.
 export default function PublisherLogin() {
+  usePageTitle('Publisher login');
   const { login } = usePublisherAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [form, setForm] = useState({ email: '', password: '' });
+  const [showPassword, setShowPassword] = useState(false);
+  const [recaptchaToken, setRecaptchaToken] = useState('');
+  const captcha = useRef(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -19,57 +26,91 @@ export default function PublisherLogin() {
     setError('');
     setSubmitting(true);
     try {
-      const { data } = await apiClient.post('/auth/publisher/login', form);
+      const { data } = await apiClient.post('/auth/publisher/login', { ...form, recaptchaToken });
       login(data.accessToken, data.user);
       navigate(location.state?.from?.pathname || '/publisher/dashboard', { replace: true });
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed');
+      setError(errorMessage(err, 'Login failed'));
+      captcha.current?.reset();
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4 rounded-xl bg-white p-8 shadow">
-        <h1 className="text-xl font-bold text-gray-800">Publisher Login</h1>
-        {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Email</label>
-          <input
+    <AuthShell
+      title="Welcome back"
+      subtitle="Sign in to your publisher dashboard."
+      footer={
+        <>
+          New to GiftReward?{' '}
+          <Link to="/publisher/register" className="font-bold text-brand-600 hover:text-brand-700">
+            Create a free account
+          </Link>
+        </>
+      }
+    >
+      {location.state?.resetSuccess && (
+        <Alert tone="success" className="mb-5">
+          Password updated. Sign in with your new password.
+        </Alert>
+      )}
+      {error && (
+        <Alert tone="danger" className="mb-5">
+          {error}
+        </Alert>
+      )}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Field label="Email address" htmlFor="email">
+          <Input
+            id="email"
             type="email"
+            icon={Mail}
             required
+            autoComplete="email"
+            placeholder="you@company.com"
             value={form.email}
             onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
           />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Password</label>
-          <input
-            type="password"
-            required
-            value={form.password}
-            onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+        </Field>
+        <Field
+          label={
+            <span className="flex items-center justify-between">
+              Password
+              <Link to="/publisher/forgot-password" className="font-semibold text-brand-600 hover:text-brand-700">
+                Forgot password?
+              </Link>
+            </span>
+          }
+          htmlFor="password"
         >
-          {submitting ? 'Signing in...' : 'Sign in'}
-        </button>
-        <div className="flex justify-between text-sm">
-          <Link to="/publisher/register" className="font-medium text-blue-600">
-            Create account
-          </Link>
-          <Link to="/publisher/forgot-password" className="font-medium text-gray-500">
-            Forgot password?
-          </Link>
-        </div>
+          <div className="relative">
+            <Input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              icon={Lock}
+              required
+              autoComplete="current-password"
+              placeholder="••••••••"
+              inputClassName="pr-11"
+              value={form.password}
+              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((s) => !s)}
+              className="absolute top-1/2 right-3 -translate-y-1/2 text-ink-400 hover:text-ink-700"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+        </Field>
+        <Recaptcha ref={captcha} onChange={setRecaptchaToken} />
+        <Button type="submit" size="lg" className="w-full" loading={submitting} iconRight={ArrowRight}>
+          Sign in
+        </Button>
       </form>
-    </div>
+    </AuthShell>
   );
 }

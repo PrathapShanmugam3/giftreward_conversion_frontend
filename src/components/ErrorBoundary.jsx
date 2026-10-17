@@ -19,13 +19,14 @@ export default class ErrorBoundary extends Component {
   render() {
     if (this.state.error) {
       return (
-        <div className="rounded-admin bg-white p-6 text-center shadow-admin-card">
-          <p className="mb-3 text-sm font-semibold text-admin-danger">Something went wrong loading this page.</p>
-          <p className="mb-4 text-xs text-admin-gray">{this.state.error.message}</p>
+        <div className="mx-auto max-w-md rounded-3xl bg-white p-8 text-center shadow-card ring-1 ring-line">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-xl text-rose-500">!</div>
+          <p className="text-base font-bold text-ink-900">Something went wrong loading this page.</p>
+          <p className="mt-1 mb-5 text-sm break-words text-ink-500">{this.state.error.message}</p>
           <button
             type="button"
             onClick={() => this.setState({ error: null })}
-            className="rounded-lg bg-admin-primary px-4 py-2 text-sm font-semibold text-white hover:bg-admin-primary-dark"
+            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-glow hover:bg-brand-700"
           >
             Try again
           </button>
