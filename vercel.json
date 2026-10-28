@@ -7,6 +7,12 @@
     { "source": "/go/:path*", "destination": "https://giftreward-conversion-backend.vercel.app/go/:path*" },
     { "source": "/postback/:path*", "destination": "https://giftreward-conversion-backend.vercel.app/postback/:path*" },
     { "source": "/report/:path*", "destination": "https://giftreward-conversion-backend.vercel.app/report/:path*" },
+    { "source": "/o", "destination": "/index.html" },
+    { "source": "/o/:path*", "destination": "/index.html" },
+    { "source": "/refer", "destination": "/index.html" },
+    { "source": "/refer/:path*", "destination": "/index.html" },
+    { "source": "/tracking", "destination": "/index.html" },
+    { "source": "/tracking/:path*", "destination": "/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
