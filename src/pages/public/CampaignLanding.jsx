@@ -79,6 +79,12 @@ export default function CampaignLanding() {
           <div className="rounded-3xl bg-white shadow-pop">
             <Loader label="Loading your offer…" />
           </div>
+        ) : data.offerUnavailable ? (
+          <div className="rounded-3xl bg-white p-8 text-center shadow-pop">
+            <XCircle className="mx-auto h-12 w-12 text-rose-500" />
+            <p className="mt-4 text-lg font-extrabold text-ink-900">Offer unavailable</p>
+            <p className="mt-1 text-sm text-ink-500">{data.errorMessage}</p>
+          </div>
         ) : (
           <div className="animate-slide-up space-y-4">
             {banner && <img src={banner} alt="" className="w-full rounded-3xl object-cover shadow-pop ring-1 ring-white/10" />}
@@ -112,13 +118,13 @@ export default function CampaignLanding() {
 
                 <form onSubmit={handleSubmit} className="mt-5 space-y-4">
                   <Field label="Your name" required>
-                    <Input icon={User} required autoComplete="name" placeholder="e.g. Rahul Sharma" value={form.name} onChange={update('name')} inputClassName="h-12" />
+                    <Input icon={User} required pattern="[A-Za-z ]+" title="Use letters and spaces only." autoComplete="name" placeholder="e.g. Rahul Sharma" value={form.name} onChange={update('name')} inputClassName="h-12" />
                   </Field>
                   <Field label="Mobile number" required>
-                    <Input icon={Phone} required inputMode="numeric" maxLength={10} autoComplete="tel-national" placeholder="10-digit mobile" value={form.mobile} onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value.replace(/\D/g, '') }))} inputClassName="h-12" />
+                    <Input icon={Phone} required pattern="[0-9]{10}" title="Enter a 10-digit mobile number." inputMode="numeric" maxLength={10} autoComplete="tel-national" placeholder="10-digit mobile" value={form.mobile} onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value.replace(/\D/g, '') }))} inputClassName="h-12" />
                   </Field>
                   <Field label="UPI ID" required hint="Cashback is sent to this UPI ID.">
-                    <Input icon={Smartphone} required autoCapitalize="none" placeholder="yourname@upi" value={form.upi_id} onChange={update('upi_id')} inputClassName="h-12" />
+                    <Input icon={Smartphone} required pattern="[A-Za-z0-9._-]+@[A-Za-z0-9]+" title="Enter a valid UPI ID, e.g. name@upi." maxLength={100} autoCapitalize="none" placeholder="yourname@upi" value={form.upi_id} onChange={update('upi_id')} inputClassName="h-12" />
                   </Field>
                   <Button type="submit" size="lg" className="h-14 w-full text-base" loading={submitting} iconRight={ArrowRight}>
                     Claim your ₹{Number(data.totalUserCashback).toFixed(2)}
