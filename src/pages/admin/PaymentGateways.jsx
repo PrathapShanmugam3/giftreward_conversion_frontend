@@ -195,6 +195,7 @@ function GatewayModal({ gateway, onClose, onSubmit }) {
         {form.type === 'api' && (
           <div className="space-y-4 rounded-2xl bg-slate-50 p-4 ring-1 ring-line">
             <p className="text-xs font-bold tracking-wider text-ink-500 uppercase">API configuration</p>
+            <p className="text-xs leading-5 text-ink-600">When selected during withdrawal approval, this endpoint receives the withdrawal ID, amount (INR), method, beneficiary details, and an idempotency key as JSON (or query parameters for GET). API key and secret are sent as <code>X-API-Key</code> and <code>X-API-Secret</code> headers. Configure the provider endpoint to accept this request shape and return one of the success HTTP codes below.</p>
             <div className="grid gap-4 sm:grid-cols-[120px_1fr]">
               <Field label="Method">
                 <Select value={config.apiMethod} onChange={setC('apiMethod')}>

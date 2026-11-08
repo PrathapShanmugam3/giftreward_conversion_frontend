@@ -36,6 +36,7 @@ export default function AdminWithdrawals() {
   const [rows, setRows] = useState(null);
   const [all, setAll] = useState([]);
   const [status, setStatus] = useState('pending');
+  const [gateways, setGateways] = useState([]);
   const [review, setReview] = useState(null); // { withdrawal, action }
 
   async function load() {
@@ -50,6 +51,10 @@ export default function AdminWithdrawals() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
+  useEffect(() => {
+    apiClient.get('/admin/gateways').then(({ data }) => setGateways(data.gateways || [])).catch(() => setGateways([]));
+  }, []);
+
   const stats = useMemo(() => {
     const sum = (s) => all.filter((w) => w.status === s).reduce((t, w) => t + Number(w.amount), 0);
     return {
@@ -62,7 +67,7 @@ export default function AdminWithdrawals() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Finance" title="Withdrawal requests" subtitle="Approve payouts after sending them; rejected amounts go straight back to the publisher's wallet." />
+      <PageHeader eyebrow="Finance" title="Withdrawal requests" subtitle="Send approved payouts through an active API gateway or record a manual payment. Rejections refund the publisher." />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Awaiting review" value={formatNumber(stats.pendingCount)} icon={Clock} tone="warning" />
@@ -162,6 +167,7 @@ export default function AdminWithdrawals() {
       {review && (
         <ReviewModal
           {...review}
+          gateways={gateways}
           onClose={() => setReview(null)}
           onDone={async () => {
             toast.success(`WD-${review.withdrawal.id} ${review.action}`);
@@ -174,8 +180,9 @@ export default function AdminWithdrawals() {
   );
 }
 
-function ReviewModal({ withdrawal, action, onClose, onDone }) {
+function ReviewModal({ withdrawal, action, gateways, onClose, onDone }) {
   const [notes, setNotes] = useState('');
+  const [gatewayId, setGatewayId] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const approve = action === 'approved';
@@ -185,7 +192,7 @@ function ReviewModal({ withdrawal, action, onClose, onDone }) {
     setSaving(true);
     setError('');
     try {
-      await apiClient.post(`/admin/withdrawals/${withdrawal.id}/status`, { status: action, notes });
+      await apiClient.post(`/admin/withdrawals/${withdrawal.id}/status`, { status: action, notes, ...(gatewayId ? { gatewayId: Number(gatewayId) } : {}) });
       await onDone();
     } catch (err) {
       setError(errorMessage(err, 'Update failed'));
@@ -206,7 +213,7 @@ function ReviewModal({ withdrawal, action, onClose, onDone }) {
             Cancel
           </Button>
           <Button type="submit" variant={approve ? 'success' : 'danger'} loading={saving}>
-            {approve ? 'Mark as paid' : 'Reject & refund'}
+            {approve ? (gatewayId ? 'Send payout & approve' : 'Mark as paid') : 'Reject & refund'}
           </Button>
         </>
       }
@@ -219,6 +226,14 @@ function ReviewModal({ withdrawal, action, onClose, onDone }) {
           <DetailRow label={withdrawal.method?.toUpperCase()}>{withdrawal.details}</DetailRow>
         </dl>
         {!approve && <Alert tone="warning">{formatCurrency(withdrawal.amount)} will be refunded to the publisher's wallet.</Alert>}
+        {approve && (
+          <Field label="Payout gateway" hint="Choose an active API gateway to send the payout now, or leave blank if you paid manually.">
+            <select className="w-full rounded-xl border border-line bg-white px-3 py-2 text-sm" value={gatewayId} onChange={(e) => setGatewayId(e.target.value)}>
+              <option value="">Manual payout (already sent)</option>
+              {gateways.filter((g) => g.type === 'api' && g.status === 'active').map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          </Field>
+        )}
         <Field label="Notes" hint="Shown to the publisher on their invoice.">
           <Textarea rows={3} placeholder={approve ? 'e.g. Paid via UPI, ref 4182…' : 'Reason for rejection'} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
