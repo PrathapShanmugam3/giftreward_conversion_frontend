@@ -25,7 +25,7 @@ import { cn, errorMessage, formatCurrency, formatDate, formatDateTime } from '..
 
 const METHODS = [
   { value: 'upi', label: 'UPI', icon: Smartphone, placeholder: 'yourname@upi', hint: 'UPI ID to receive the payout' },
-  { value: 'bank', label: 'Bank transfer', icon: Landmark, placeholder: 'A/c no, IFSC, account holder name', hint: 'Account number, IFSC and holder name' },
+  { value: 'bank', label: 'Bank transfer', icon: Landmark, placeholder: 'Account Number: … | IFSC: … | Account Holder: …', hint: 'Use the labeled format so RupiyaX can read your account number, IFSC and holder name.' },
   { value: 'paypal', label: 'PayPal', icon: Building2, placeholder: 'you@paypal.com', hint: 'PayPal account email' },
 ];
 

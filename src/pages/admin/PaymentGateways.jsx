@@ -136,6 +136,7 @@ function GatewayModal({ gateway, onClose, onSubmit }) {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const setC = (k) => (e) => setConfig((c) => ({ ...c, [k]: e.target.value }));
+  const isRupiyaX = form.type === 'api' && form.name.trim().toLowerCase() === 'rupiyax';
 
   async function submit(e) {
     e.preventDefault();
@@ -195,7 +196,11 @@ function GatewayModal({ gateway, onClose, onSubmit }) {
         {form.type === 'api' && (
           <div className="space-y-4 rounded-2xl bg-slate-50 p-4 ring-1 ring-line">
             <p className="text-xs font-bold tracking-wider text-ink-500 uppercase">API configuration</p>
-            <p className="text-xs leading-5 text-ink-600">When selected during withdrawal approval, this endpoint receives the withdrawal ID, amount (INR), method, beneficiary details, and an idempotency key as JSON (or query parameters for GET). API key and secret are sent as <code>X-API-Key</code> and <code>X-API-Secret</code> headers. Configure the provider endpoint to accept this request shape and return one of the success HTTP codes below.</p>
+            {isRupiyaX ? (
+              <p className="text-xs leading-5 text-ink-600">RupiRewards uses RupiyaX’s built-in payout API. Enter the RupiyaX API key below; the payout endpoint and request format are handled automatically when this gateway is selected during approval.</p>
+            ) : (
+              <p className="text-xs leading-5 text-ink-600">When selected during withdrawal approval, this endpoint receives the withdrawal ID, amount (INR), method, beneficiary details, and an idempotency key as JSON (or query parameters for GET). API key and secret are sent as <code>X-API-Key</code> and <code>X-API-Secret</code> headers. Configure the provider endpoint to accept this request shape and return one of the success HTTP codes below.</p>
+            )}
             <div className="grid gap-4 sm:grid-cols-[120px_1fr]">
               <Field label="Method">
                 <Select value={config.apiMethod} onChange={setC('apiMethod')}>
@@ -204,11 +209,11 @@ function GatewayModal({ gateway, onClose, onSubmit }) {
                   ))}
                 </Select>
               </Field>
-              <Field label="Endpoint">
+              {!isRupiyaX && <Field label="Endpoint">
                 <Input type="url" className="font-mono text-xs" placeholder="https://api.provider.com/payouts" value={config.apiEndpoint} onChange={setC('apiEndpoint')} />
-              </Field>
+              </Field>}
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            {!isRupiyaX && <div className="grid gap-4 sm:grid-cols-2">
               <Field label="API key">
                 <Input className="font-mono text-xs" value={config.apiKey} onChange={setC('apiKey')} autoComplete="off" />
               </Field>
@@ -218,7 +223,10 @@ function GatewayModal({ gateway, onClose, onSubmit }) {
               <Field label="Success HTTP codes" hint="Comma-separated">
                 <Input className="font-mono text-xs" value={config.successCodes} onChange={setC('successCodes')} />
               </Field>
-            </div>
+            </div>}
+            {isRupiyaX && <Field label="RupiyaX API key" required hint="Use the key from your RupiRewards App Settings. Keep it private.">
+              <Input type="password" className="font-mono text-xs" value={config.apiKey} onChange={setC('apiKey')} autoComplete="new-password" />
+            </Field>}
             <Field label="UPI IDs" hint="Optional, one per line or comma-separated">
               <Textarea rows={2} className="font-mono text-xs" value={config.upiIds} onChange={setC('upiIds')} />
             </Field>
