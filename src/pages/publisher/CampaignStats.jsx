@@ -78,7 +78,7 @@ export default function CampaignStats() {
             <THead>
               <tr>
                 <Th>Visitor</Th>
-                <Th>UPI</Th>
+                <Th>Bank details</Th>
                 <Th align="right">Amount</Th>
                 <Th>Date</Th>
               </tr>

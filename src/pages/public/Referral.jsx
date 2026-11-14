@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CheckCircle2, Gift, MessageCircle, Send, Smartphone, Users, XCircle } from 'lucide-react';
+import { CheckCircle2, Gift, Landmark, MessageCircle, Send, Users, XCircle } from 'lucide-react';
 import { apiClient } from '../../api/client';
 import { usePageTitle } from '../../context/SiteContext';
 import { BrandMark } from '../../layouts/AppShell';
@@ -8,11 +8,11 @@ import Loader from '../../components/Loader';
 import { Alert, Button, CopyField, Field, Input } from '../../components/ui';
 import { errorMessage } from '../../utils/format';
 
-const UPI_RE = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9]+$/i;
+const IFSC_RE = /^[A-Za-z]{4}0[A-Za-z0-9]{6}$/;
 
 // Public referral-code generator — replaces refer/index.php. A user who
 // completed the offer gets a personal link; friends who claim through it
-// are credited back to this UPI ID on the /o landing page.
+// referral cashback is sent to the bank account supplied here after review.
 export default function Referral() {
   usePageTitle('Refer & earn');
   const [params] = useSearchParams();
@@ -22,7 +22,7 @@ export default function Referral() {
 
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState(!o || !pid || !cid ? 'This referral link is incomplete.' : '');
-  const [form, setForm] = useState({ upi_id: '', telegram_channel: '' });
+  const [form, setForm] = useState({ account_number: '', ifsc: '', account_holder: '', telegram_channel: '' });
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -39,7 +39,9 @@ export default function Referral() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    if (!UPI_RE.test(form.upi_id)) return setError('Please enter a valid UPI ID (e.g. 1234567890@upi).');
+    if (!/^[0-9]{6,20}$/.test(form.account_number)) return setError('Enter a valid bank account number.');
+    if (!IFSC_RE.test(form.ifsc)) return setError('Enter a valid 11-character IFSC code.');
+    if (!form.account_holder.trim()) return setError('Enter the account holder name.');
     setSubmitting(true);
     try {
       const { data: res } = await apiClient.post('/refer', form, { params: { o, pid, cid } });
@@ -112,9 +114,13 @@ export default function Referral() {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-                  <Field label="Your UPI ID" required hint="Referral cashback is paid here.">
-                    <Input icon={Smartphone} required autoCapitalize="none" placeholder="yourname@upi" value={form.upi_id} onChange={(e) => setForm((f) => ({ ...f, upi_id: e.target.value }))} inputClassName="h-12" />
+                  <Field label="Bank account number" required hint="Referral cashback is sent by bank transfer after review.">
+                    <Input icon={Landmark} required inputMode="numeric" pattern="[0-9]{6,20}" maxLength={20} placeholder="Bank account number" value={form.account_number} onChange={(e) => setForm((f) => ({ ...f, account_number: e.target.value.replace(/\D/g, '').slice(0, 20) }))} inputClassName="h-12" />
                   </Field>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="IFSC" required><Input required maxLength={11} pattern="[A-Za-z]{4}0[A-Za-z0-9]{6}" placeholder="ABCD0123456" value={form.ifsc} onChange={(e) => setForm((f) => ({ ...f, ifsc: e.target.value.toUpperCase() }))} inputClassName="h-12" /></Field>
+                    <Field label="Account holder" required><Input required maxLength={50} autoComplete="name" placeholder="Name on account" value={form.account_holder} onChange={(e) => setForm((f) => ({ ...f, account_holder: e.target.value }))} inputClassName="h-12" /></Field>
+                  </div>
                   <Field label="Telegram channel" hint="Optional — shown to friends who open your link.">
                     <Input icon={Send} placeholder="https://t.me/yourchannel" value={form.telegram_channel} onChange={(e) => setForm((f) => ({ ...f, telegram_channel: e.target.value }))} inputClassName="h-12" />
                   </Field>

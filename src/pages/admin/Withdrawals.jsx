@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Banknote, Check, CheckCircle2, Clock, IndianRupee, X, XCircle } from 'lucide-react';
+import { Banknote, Check, CheckCircle2, Clock, IndianRupee, RefreshCw, X, XCircle } from 'lucide-react';
 import { apiClient } from '../../api/client';
 import { usePageTitle } from '../../context/SiteContext';
 import {
@@ -58,21 +58,46 @@ export default function AdminWithdrawals() {
   const stats = useMemo(() => {
     const sum = (s) => all.filter((w) => w.status === s).reduce((t, w) => t + Number(w.amount), 0);
     return {
-      pendingCount: all.filter((w) => w.status === 'pending').length,
+      pendingCount: all.filter((w) => ['pending', 'approved'].includes(w.status)).length,
       pending: sum('pending'),
-      approved: sum('approved'),
+      processing: sum('approved'),
+      paid: sum('paid'),
+      paidCount: all.filter((w) => w.status === 'paid').length,
+      failedCount: all.filter((w) => w.status === 'failed').length,
       rejected: all.filter((w) => w.status === 'rejected').length,
     };
   }, [all]);
+
+  async function refreshPayout(id) {
+    try {
+      const { data } = await apiClient.get(`/admin/withdrawals/${id}/gateway-status`);
+      const state = data.gateway?.data?.status || 'unknown';
+      toast.success(`RupiyaX status: ${state}`);
+      await load();
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not refresh RupiyaX status'));
+    }
+  }
+
+  async function markPaidManually(withdrawal) {
+    try {
+      await apiClient.post(`/admin/withdrawals/${withdrawal.id}/mark-paid-manual`);
+      toast.success(`WD-${withdrawal.id} marked paid`);
+      await load();
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not mark payout as paid'));
+    }
+  }
 
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="Finance" title="Withdrawal requests" subtitle="Send approved payouts through an active API gateway or record a manual payment. Rejections refund the publisher." />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <StatCard label="Awaiting review" value={formatNumber(stats.pendingCount)} icon={Clock} tone="warning" />
         <StatCard label="Pending amount" value={formatCurrency(stats.pending)} icon={IndianRupee} tone="brand" />
-        <StatCard label="Paid out" value={formatCurrency(stats.approved)} icon={CheckCircle2} tone="success" />
+        <StatCard label="Processing" value={formatCurrency(stats.processing)} icon={RefreshCw} tone="info" />
+        <StatCard label="Paid out" value={formatCurrency(stats.paid)} icon={CheckCircle2} tone="success" />
         <StatCard label="Rejected" value={formatNumber(stats.rejected)} icon={XCircle} tone="danger" />
       </div>
 
@@ -83,7 +108,8 @@ export default function AdminWithdrawals() {
             onChange={setStatus}
             options={[
               { value: 'pending', label: 'Pending', count: stats.pendingCount },
-              { value: 'approved', label: 'Approved' },
+              { value: 'paid', label: 'Paid history', count: stats.paidCount },
+              { value: 'failed', label: 'Failed', count: stats.failedCount },
               { value: 'rejected', label: 'Rejected' },
               { value: 'all', label: 'All' },
             ]}
@@ -96,7 +122,7 @@ export default function AdminWithdrawals() {
               <Th>Publisher</Th>
               <Th>Payout to</Th>
               <Th align="right">Amount</Th>
-              <Th>Status</Th>
+              <Th>Status / gateway</Th>
               <Th>Notes</Th>
               <Th align="right">Actions</Th>
             </tr>
@@ -105,7 +131,7 @@ export default function AdminWithdrawals() {
             {!rows ? (
               <TableSkeleton rows={5} cols={7} />
             ) : rows.length === 0 ? (
-              <TableEmpty colSpan={7} icon={Banknote} title={status === 'pending' ? 'All caught up' : 'No withdrawals found'} description={status === 'pending' ? 'No payout requests are waiting for review.' : undefined} />
+                    <TableEmpty colSpan={7} icon={Banknote} title={status === 'pending' ? 'All caught up' : 'No withdrawals found'} description={status === 'pending' ? 'No payout requests are waiting for review.' : undefined} />
             ) : (
               rows.map((w) => (
                 <Tr key={w.id}>
@@ -137,8 +163,9 @@ export default function AdminWithdrawals() {
                     {formatCurrency(w.amount)}
                   </Td>
                   <Td>
-                    <StatusBadge status={w.status} />
-                    {w.processedAt && <p className="mt-1 text-[11px] whitespace-nowrap text-ink-400">{formatDateTime(w.processedAt)}</p>}
+                    <StatusBadge status={w.status} label={w.status === 'approved' ? 'Processing' : w.status === 'paid' ? 'Paid' : undefined} />
+                    {w.gatewayStatus && <p className="mt-1 text-[11px] text-ink-500">Gateway: {w.gatewayStatus}</p>}
+                    {(w.paidAt || w.processedAt) && <p className="mt-1 text-[11px] whitespace-nowrap text-ink-400">{formatDateTime(w.paidAt || w.processedAt)}</p>}
                   </Td>
                   <Td className="max-w-[200px] truncate text-xs text-ink-500" title={w.notes}>
                     {w.notes || '—'}
@@ -153,6 +180,14 @@ export default function AdminWithdrawals() {
                           Reject
                         </Button>
                       </>
+                    ) : w.status === 'approved' ? (
+                      <div className="flex justify-end gap-1">
+                        {w.Payouts?.some((p) => p.PaymentGateway?.name?.toLowerCase() === 'rupiyax') ? (
+                          <Button size="xs" variant="secondary" icon={RefreshCw} onClick={() => refreshPayout(w.id)}>Check status</Button>
+                        ) : (
+                          <Button size="xs" variant="success-soft" icon={Check} onClick={() => markPaidManually(w)}>Mark paid</Button>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-xs text-ink-400">Resolved</span>
                     )}
@@ -227,7 +262,7 @@ function ReviewModal({ withdrawal, action, gateways, onClose, onDone }) {
         </dl>
         {!approve && <Alert tone="warning">{formatCurrency(withdrawal.amount)} will be refunded to the publisher's wallet.</Alert>}
         {approve && (
-          <Field label="Payout gateway" hint="Choose an active API gateway to send the payout now, or leave blank if you paid manually.">
+          <Field label="Payout gateway" hint="Choose an active API gateway to submit this payout, or leave blank if you already paid manually.">
             <select className="w-full rounded-xl border border-line bg-white px-3 py-2 text-sm" value={gatewayId} onChange={(e) => setGatewayId(e.target.value)}>
               <option value="">Manual payout (already sent)</option>
               {gateways.filter((g) => g.type === 'api' && g.status === 'active').map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
@@ -235,7 +270,7 @@ function ReviewModal({ withdrawal, action, gateways, onClose, onDone }) {
           </Field>
         )}
         <Field label="Notes" hint="Shown to the publisher on their invoice.">
-          <Textarea rows={3} placeholder={approve ? 'e.g. Paid via UPI, ref 4182…' : 'Reason for rejection'} value={notes} onChange={(e) => setNotes(e.target.value)} />
+          <Textarea rows={3} placeholder={approve ? 'e.g. Paid by bank transfer, ref 4182…' : 'Reason for rejection'} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
       </div>
     </Modal>

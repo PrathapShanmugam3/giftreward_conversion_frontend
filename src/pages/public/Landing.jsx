@@ -49,7 +49,7 @@ const STEPS = [
   { title: 'Register', text: 'Sign up for free and get instant access to your publisher dashboard.' },
   { title: 'Browse offers', text: 'Explore high-converting offers across multiple verticals.' },
   { title: 'Promote', text: 'Grab your unique tracking link and share it with your audience.' },
-  { title: 'Get paid', text: 'Earn commissions and withdraw straight to UPI or bank in INR.' },
+  { title: 'Get paid', text: 'Earn commissions and withdraw by bank transfer in INR.' },
 ];
 
 function HeroMock() {
@@ -128,7 +128,7 @@ export default function Landing() {
               <span className="block bg-gradient-to-r from-brand-300 via-violet-300 to-cyan-300 bg-clip-text text-transparent">high-converting offers.</span>
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-slate-300">
-              Access CPA, CPC, CPD, CPR and CPI campaigns, track every click in real time, and get paid in INR — straight to your UPI or bank.
+              Access CPA, CPC, CPD, CPR and CPI campaigns, track every click in real time, and get paid in INR by bank transfer.
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
               <Button to="/publisher/register" size="lg" iconRight={ArrowRight}>

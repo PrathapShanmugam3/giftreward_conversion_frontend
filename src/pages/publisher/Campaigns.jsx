@@ -76,7 +76,7 @@ export default function PublisherCampaigns() {
       <PageHeader
         eyebrow="Monetize"
         title="Cashback campaigns"
-        subtitle="Wrap an offer in a branded landing page that collects name, mobile and UPI — then share cashback with your users."
+        subtitle="Wrap an offer in a branded landing page that collects name, mobile and bank details — then share cashback with your users."
         actions={
           <Button icon={Plus} onClick={() => setModalCampaign(null)} disabled={offers.length === 0}>
             New campaign

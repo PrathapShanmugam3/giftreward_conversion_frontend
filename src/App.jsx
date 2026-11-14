@@ -5,6 +5,7 @@ import ProtectedRoute from './routes/ProtectedRoute';
 import PublisherLayout from './layouts/PublisherLayout';
 import AdminLayout from './layouts/AdminLayout';
 import Loader from './components/Loader';
+import NetworkLoader from './components/NetworkLoader';
 import { PageSkeleton } from './components/ui';
 
 // Route-level code splitting: public visitors never download the admin
@@ -44,6 +45,7 @@ const AdminPublishers = lazy(() => import('./pages/admin/Publishers'));
 const AdminConversions = lazy(() => import('./pages/admin/Conversions'));
 const AdminReports = lazy(() => import('./pages/admin/Reports'));
 const AdminWithdrawals = lazy(() => import('./pages/admin/Withdrawals'));
+const CampaignPayouts = lazy(() => import('./pages/admin/CampaignPayouts'));
 const AdminPostbacks = lazy(() => import('./pages/admin/Postbacks'));
 const AdminPostbackTools = lazy(() => import('./pages/admin/PostbackTools'));
 const CustomEmailSender = lazy(() => import('./pages/admin/CustomEmailSender'));
@@ -72,6 +74,7 @@ export default function App() {
         </div>
       }
     >
+      <NetworkLoader />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/o" element={<CampaignLanding />} />
@@ -120,6 +123,7 @@ export default function App() {
             <Route path="conversions" element={page(<AdminConversions />)} />
             <Route path="reports" element={page(<AdminReports />)} />
             <Route path="withdrawals" element={page(<AdminWithdrawals />)} />
+            <Route path="campaign-payouts" element={page(<CampaignPayouts />)} />
             <Route path="postbacks" element={page(<AdminPostbacks />)} />
             <Route path="postback-tools" element={page(<AdminPostbackTools />)} />
             <Route path="custom-email" element={page(<CustomEmailSender />)} />

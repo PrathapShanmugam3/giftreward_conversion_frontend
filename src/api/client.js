@@ -15,6 +15,25 @@ export const apiClient = axios.create({
 // token.
 const tokens = { publisher: null, admin: null };
 const unauthorizedHandlers = { publisher: null, admin: null };
+let pendingRequests = 0;
+
+function publishPendingRequests() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('api:pending', { detail: pendingRequests }));
+  }
+}
+
+export function getPendingRequestCount() {
+  return pendingRequests;
+}
+
+function finishRequest(config) {
+  if (config?._pageLoaderActive) {
+    config._pageLoaderActive = false;
+    pendingRequests = Math.max(0, pendingRequests - 1);
+    publishPendingRequests();
+  }
+}
 
 function roleFor(url = '') {
   const path = url.replace(/^\/api/, '');
@@ -38,6 +57,9 @@ export function setUnauthorizedHandler(role, handler) {
 }
 
 apiClient.interceptors.request.use((config) => {
+  config._pageLoaderActive = true;
+  pendingRequests += 1;
+  publishPendingRequests();
   const role = roleFor(config.url);
   if (role && tokens[role]) {
     config.headers.Authorization = `Bearer ${tokens[role]}`;
@@ -48,9 +70,13 @@ apiClient.interceptors.request.use((config) => {
 const refreshPromises = { publisher: null, admin: null };
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    finishRequest(response.config);
+    return response;
+  },
   async (error) => {
     const { config, response } = error;
+    finishRequest(config);
     const role = roleFor(config?.url);
     // Never try to refresh the refresh/login/logout calls themselves.
     const isAuthCall = /\/auth\/(publisher|admin)\/(refresh|login|logout)/.test(config?.url || '');

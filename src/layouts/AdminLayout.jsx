@@ -67,6 +67,7 @@ const SECTIONS = [
     label: 'Finance',
     items: [
       { to: '/admin/withdrawals', label: 'Withdrawals', icon: Banknote },
+      { to: '/admin/campaign-payouts', label: 'Campaign payouts', icon: Banknote },
       { to: '/admin/gateways', label: 'Payment Gateways', icon: CreditCard },
     ],
   },

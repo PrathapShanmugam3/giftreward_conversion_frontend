@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, Banknote, Building2, FileText, Landmark, Send, Smartphone, Wallet as WalletIcon } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Banknote, FileText, Send, Wallet as WalletIcon } from 'lucide-react';
 import { apiClient } from '../../api/client';
 import { usePageTitle } from '../../context/SiteContext';
 import {
@@ -23,19 +23,13 @@ import {
 } from '../../components/ui';
 import { cn, errorMessage, formatCurrency, formatDate, formatDateTime } from '../../utils/format';
 
-const METHODS = [
-  { value: 'upi', label: 'UPI', icon: Smartphone, placeholder: 'yourname@upi', hint: 'UPI ID to receive the payout' },
-  { value: 'bank', label: 'Bank transfer', icon: Landmark, placeholder: 'Account Number: … | IFSC: … | Account Holder: …', hint: 'Use the labeled format so RupiyaX can read your account number, IFSC and holder name.' },
-  { value: 'paypal', label: 'PayPal', icon: Building2, placeholder: 'you@paypal.com', hint: 'PayPal account email' },
-];
-
 // publisher/wallet.php: balance, withdrawal request, last 10 transactions
 // and the full withdrawal history (each with an invoice).
 export default function PublisherWallet() {
   usePageTitle('Wallet');
   const toast = useToast();
   const [overview, setOverview] = useState(null);
-  const [form, setForm] = useState({ amount: '', method: 'upi', details: '' });
+  const [form, setForm] = useState({ amount: '', method: 'bank', accountNumber: '', ifsc: '', accountHolder: '' });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -53,9 +47,10 @@ export default function PublisherWallet() {
     setError('');
     setSubmitting(true);
     try {
-      const { data } = await apiClient.post('/publisher/wallet/withdrawals', form);
+      const details = `Account Number: ${form.accountNumber.trim()} | IFSC: ${form.ifsc.trim().toUpperCase()} | Account Holder: ${form.accountHolder.trim()}`;
+      const { data } = await apiClient.post('/publisher/wallet/withdrawals', { amount: form.amount, method: 'bank', details });
       toast.success(data.message || 'Withdrawal requested');
-      setForm({ amount: '', method: form.method, details: '' });
+      setForm({ amount: '', method: 'bank', accountNumber: '', ifsc: '', accountHolder: '' });
       await load();
     } catch (err) {
       setError(errorMessage(err, 'Request failed'));
@@ -68,17 +63,16 @@ export default function PublisherWallet() {
 
   const balance = Number(overview.walletBalance);
   const pendingTotal = overview.withdrawals.filter((w) => w.status === 'pending').reduce((s, w) => s + Number(w.amount), 0);
-  const paidTotal = overview.withdrawals.filter((w) => w.status === 'approved').reduce((s, w) => s + Number(w.amount), 0);
+  const paidTotal = overview.withdrawals.filter((w) => w.status === 'paid').reduce((s, w) => s + Number(w.amount), 0);
   const blockedReason = !overview.withdrawalsEnabled
     ? 'Withdrawals are temporarily disabled by the administrator.'
     : !overview.withdrawalStatus
       ? 'Withdrawals are disabled for your account. Contact support for help.'
       : '';
-  const method = METHODS.find((m) => m.value === form.method);
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Earnings" title="Wallet & payouts" subtitle="Your approved earnings land here. Withdraw to UPI, bank or PayPal." />
+      <PageHeader eyebrow="Earnings" title="Wallet & payouts" subtitle="Your approved earnings land here. Withdraw by bank transfer." />
 
       <div className="grid gap-6 xl:grid-cols-5">
         <div className="space-y-6 xl:col-span-3">
@@ -164,28 +158,9 @@ export default function PublisherWallet() {
                 Withdraw full balance
               </button>
             </Field>
-            <Field label="Payout method" required>
-              <div className="grid grid-cols-3 gap-2">
-                {METHODS.map((m) => (
-                  <button
-                    key={m.value}
-                    type="button"
-                    disabled={!!blockedReason}
-                    onClick={() => setForm((f) => ({ ...f, method: m.value }))}
-                    className={cn(
-                      'flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3 text-xs font-bold ring-1 transition disabled:opacity-50',
-                      form.method === m.value ? 'bg-brand-50 text-brand-700 ring-2 ring-brand-500' : 'bg-white text-ink-700 ring-line hover:ring-brand-200'
-                    )}
-                  >
-                    <m.icon className="h-5 w-5" />
-                    {m.label}
-                  </button>
-                ))}
-              </div>
-            </Field>
-            <Field label="Account details" required hint={method.hint}>
-              <Input required placeholder={method.placeholder} value={form.details} onChange={(e) => setForm((f) => ({ ...f, details: e.target.value }))} disabled={!!blockedReason} />
-            </Field>
+            <Field label="Account number" required><Input required inputMode="numeric" pattern="[0-9]{6,20}" placeholder="Bank account number" value={form.accountNumber} onChange={(e) => setForm((f) => ({ ...f, accountNumber: e.target.value.replace(/\D/g, '').slice(0, 20) }))} disabled={!!blockedReason} /></Field>
+            <Field label="IFSC" required><Input required maxLength={11} pattern="[A-Za-z]{4}0[A-Za-z0-9]{6}" placeholder="ABCD0123456" value={form.ifsc} onChange={(e) => setForm((f) => ({ ...f, ifsc: e.target.value.toUpperCase() }))} disabled={!!blockedReason} /></Field>
+            <Field label="Account holder name" required><Input required maxLength={100} placeholder="Name on bank account" value={form.accountHolder} onChange={(e) => setForm((f) => ({ ...f, accountHolder: e.target.value }))} disabled={!!blockedReason} /></Field>
             <Button type="submit" size="lg" className="w-full" loading={submitting} disabled={!!blockedReason} icon={Send}>
               Request withdrawal
             </Button>

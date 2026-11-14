@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowRight, BadgeCheck, Gift, Lock, Phone, Send, Smartphone, User, Users, XCircle } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Gift, Landmark, Lock, Phone, Send, User, Users, XCircle } from 'lucide-react';
 import { apiClient } from '../../api/client';
 import { useSite, usePageTitle } from '../../context/SiteContext';
 import { BrandMark } from '../../layouts/AppShell';
@@ -10,11 +10,11 @@ import { Alert, Button, Field, Input } from '../../components/ui';
 import { errorMessage } from '../../utils/format';
 
 const MOBILE_RE = /^[0-9]{10}$/;
-const UPI_RE = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9]+$/;
+const IFSC_RE = /^[A-Za-z]{4}0[A-Za-z0-9]{6}$/;
 
 // Public cashback landing page — replaces o/index.php. Collects name,
-// mobile and UPI, records a campaign_clicks row, then sends the visitor to
-// /go (p1 = UPI, p2 = referrer UPI, sub1 = mobile) and on to the advertiser.
+// mobile and bank details, records a campaign_clicks row, then sends the
+// visitor to /go (p1 = account number, p2 = referrer account, sub1 = mobile).
 export default function CampaignLanding() {
   const [params] = useSearchParams();
   const { banner } = useSite();
@@ -25,7 +25,7 @@ export default function CampaignLanding() {
 
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState(!o || !pid || !cid ? 'This link is incomplete. Please use the full link you were given.' : '');
-  const [form, setForm] = useState({ name: '', mobile: '', upi_id: '' });
+  const [form, setForm] = useState({ name: '', mobile: '', account_number: '', ifsc: '', account_holder: '' });
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   usePageTitle(data ? `${data.offerName} — claim ₹${Number(data.totalUserCashback).toFixed(2)}` : 'Claim your cashback');
@@ -46,7 +46,9 @@ export default function CampaignLanding() {
     setSubmitError('');
     if (!/^[A-Za-z ]+$/.test(form.name.trim())) return setSubmitError('Please enter a valid name (letters and spaces only).');
     if (!MOBILE_RE.test(form.mobile)) return setSubmitError('Please enter a valid 10-digit mobile number.');
-    if (!UPI_RE.test(form.upi_id)) return setSubmitError('Please enter a valid UPI ID, e.g. name@upi.');
+    if (!/^[0-9]{6,20}$/.test(form.account_number)) return setSubmitError('Enter a valid bank account number.');
+    if (!IFSC_RE.test(form.ifsc)) return setSubmitError('Enter a valid 11-character IFSC code.');
+    if (!form.account_holder.trim()) return setSubmitError('Enter the account holder name.');
 
     setSubmitting(true);
     try {
@@ -92,9 +94,9 @@ export default function CampaignLanding() {
             <div className="glow-border rounded-3xl bg-white shadow-pop">
               <div className="rounded-3xl bg-white p-6">
                 {data.errorMessage && <Alert tone="warning" className="mb-4">{data.errorMessage}</Alert>}
-                {data.referrer?.upiId && (
+                {data.referrer && (
                   <p className="mb-4 flex items-center gap-2 rounded-xl bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700 ring-1 ring-violet-100">
-                    <Users className="h-4 w-4" /> Invited by {data.referrer.upiId}
+                    <Users className="h-4 w-4" /> Invited by a friend
                   </p>
                 )}
                 <div className="flex items-center gap-4">
@@ -111,7 +113,7 @@ export default function CampaignLanding() {
                     <Gift className="h-4 w-4" /> Your cashback reward
                   </p>
                   <p className="relative mt-1 text-5xl font-extrabold tracking-tight tabular-nums">₹{Number(data.totalUserCashback).toFixed(2)}</p>
-                  <p className="relative mt-1 text-xs opacity-90">Paid to your UPI after the task is verified</p>
+                  <p className="relative mt-1 text-xs opacity-90">Bank payout after the task is verified</p>
                 </div>
 
                 {submitError && <Alert tone="danger" className="mt-5">{submitError}</Alert>}
@@ -123,9 +125,13 @@ export default function CampaignLanding() {
                   <Field label="Mobile number" required>
                     <Input icon={Phone} required pattern="[0-9]{10}" title="Enter a 10-digit mobile number." inputMode="numeric" maxLength={10} autoComplete="tel-national" placeholder="10-digit mobile" value={form.mobile} onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value.replace(/\D/g, '') }))} inputClassName="h-12" />
                   </Field>
-                  <Field label="UPI ID" required hint="Cashback is sent to this UPI ID.">
-                    <Input icon={Smartphone} required pattern="[A-Za-z0-9._-]+@[A-Za-z0-9]+" title="Enter a valid UPI ID, e.g. name@upi." maxLength={100} autoCapitalize="none" placeholder="yourname@upi" value={form.upi_id} onChange={update('upi_id')} inputClassName="h-12" />
+                  <Field label="Bank account number" required hint="Cashback is sent by bank transfer after task review.">
+                    <Input icon={Landmark} required inputMode="numeric" pattern="[0-9]{6,20}" maxLength={20} placeholder="Bank account number" value={form.account_number} onChange={(e) => setForm((f) => ({ ...f, account_number: e.target.value.replace(/\D/g, '').slice(0, 20) }))} inputClassName="h-12" />
                   </Field>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="IFSC" required><Input required maxLength={11} pattern="[A-Za-z]{4}0[A-Za-z0-9]{6}" placeholder="ABCD0123456" value={form.ifsc} onChange={(e) => setForm((f) => ({ ...f, ifsc: e.target.value.toUpperCase() }))} inputClassName="h-12" /></Field>
+                    <Field label="Account holder" required><Input required maxLength={50} autoComplete="name" placeholder="Name on account" value={form.account_holder} onChange={update('account_holder')} inputClassName="h-12" /></Field>
+                  </div>
                   <Button type="submit" size="lg" className="h-14 w-full text-base" loading={submitting} iconRight={ArrowRight}>
                     Claim your ₹{Number(data.totalUserCashback).toFixed(2)}
                   </Button>

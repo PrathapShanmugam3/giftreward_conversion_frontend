@@ -39,6 +39,7 @@ export function Badge({ tone = 'neutral', dot = false, className, children }) {
 // looks the same on conversions, withdrawals, postbacks and offer requests.
 const STATUS_TONES = {
   approved: 'success',
+  paid: 'success',
   active: 'success',
   converted: 'success',
   allowed: 'success',
@@ -51,6 +52,7 @@ const STATUS_TONES = {
   disabled: 'neutral',
   'not converted': 'neutral',
   rejected: 'danger',
+  failed: 'danger',
   blocked: 'danger',
   deleted: 'danger',
   locked: 'danger',

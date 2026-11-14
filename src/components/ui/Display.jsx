@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Copy, Inbox } from 'lucide-react';
 import { cn, initials } from '../../utils/format';
+import Loader from '../Loader';
 
 export function PageHeader({ title, subtitle, eyebrow, actions, className }) {
   return (
@@ -193,20 +194,7 @@ export function Skeleton({ className }) {
 }
 
 export function PageSkeleton() {
-  return (
-    <div className="animate-fade-in space-y-6">
-      <div className="space-y-2">
-        <Skeleton className="h-7 w-56" />
-        <Skeleton className="h-4 w-80" />
-      </div>
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-28" />
-        ))}
-      </div>
-      <Skeleton className="h-72" />
-    </div>
-  );
+  return <Loader label="Loading page data" />;
 }
 
 // Key/value row used in detail panels (invoice, offer detail sidebar).

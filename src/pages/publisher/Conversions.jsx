@@ -23,7 +23,7 @@ import {
 import { formatCurrency, formatDateTime, formatNumber } from '../../utils/format';
 
 // publisher/conversions.php: own conversions joined with offer, event and
-// the originating click (p1 = UPI, p2 = referrer, sub1 = mobile, IP, UA),
+// the originating click (p1 = bank account, p2 = referrer account, sub1 = mobile, IP, UA),
 // filterable by status, offer and date.
 export default function PublisherConversions() {
   usePageTitle('Conversions');
@@ -114,7 +114,7 @@ export default function PublisherConversions() {
           <THead>
             <tr>
               <Th>Offer / event</Th>
-              <Th>UPI (p1)</Th>
+              <Th>Account number (p1)</Th>
               <Th>Referrer (p2)</Th>
               <Th>Mobile (sub1)</Th>
               <Th>IP</Th>

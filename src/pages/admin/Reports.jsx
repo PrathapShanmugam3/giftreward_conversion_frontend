@@ -220,7 +220,7 @@ export default function AdminReports() {
               <Th>Click</Th>
               <Th>Publisher</Th>
               <Th>Offer</Th>
-              <Th>UPI (p1)</Th>
+              <Th>Account number (p1)</Th>
               <Th>Source</Th>
               <Th>IP</Th>
               <Th>Clicked</Th>

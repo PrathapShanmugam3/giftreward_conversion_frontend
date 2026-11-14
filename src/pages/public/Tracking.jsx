@@ -5,12 +5,11 @@ import { apiClient } from '../../api/client';
 import { usePageTitle } from '../../context/SiteContext';
 import { PublicFooter, PublicNav } from '../../layouts/PublicLayout';
 import OfferThumb from '../../components/OfferThumb';
-import { Alert, Button, Input, Skeleton, StatusBadge } from '../../components/ui';
+import { Alert, Button, Input, StatusBadge } from '../../components/ui';
+import Loader from '../../components/Loader';
 import { errorMessage, formatCurrency, formatDateTime } from '../../utils/format';
 
-// Replaces tracking/index.php: look up every click recorded for a UPI ID
-// (as p1, or as p2 when it was the referrer) with its conversion status and
-// cashback. The URL keeps the legacy shape: /tracking?q=<upi>.
+// Look up offer activity by a bank account number or the mobile used on the form.
 export default function Tracking() {
   usePageTitle('Track your cashback');
   const [params, setParams] = useSearchParams();
@@ -61,9 +60,9 @@ export default function Tracking() {
             <Smartphone className="h-7 w-7" />
           </span>
           <h1 className="mt-5 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">Track your cashback</h1>
-          <p className="mx-auto mt-3 max-w-lg text-slate-300">Enter the UPI ID you used on an offer page to see every task you started and whether it was approved.</p>
+          <p className="mx-auto mt-3 max-w-lg text-slate-300">Enter your bank account number or the mobile number you used on an offer page to check your task status.</p>
           <form onSubmit={submit} className="mx-auto mt-8 flex max-w-xl flex-col gap-2 rounded-2xl bg-white/10 p-2 ring-1 ring-white/15 backdrop-blur sm:flex-row">
-            <Input icon={Search} placeholder="yourname@upi" value={input} onChange={(e) => setInput(e.target.value)} className="flex-1" inputClassName="h-12 text-base" />
+            <Input icon={Search} placeholder="Account number or mobile number" inputMode="numeric" value={input} onChange={(e) => setInput(e.target.value.replace(/\D/g, '').slice(0, 20))} className="flex-1" inputClassName="h-12 text-base" />
             <Button type="submit" size="lg" loading={loading}>
               Track
             </Button>
@@ -74,20 +73,14 @@ export default function Tracking() {
       <main className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
         {error && <Alert tone="danger">{error}</Alert>}
 
-        {loading && (
-          <div className="space-y-3">
-            {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-24 rounded-2xl" />
-            ))}
-          </div>
-        )}
+        {loading && <Loader label="Finding your offer activity" />}
 
         {!loading && results && results.length === 0 && (
           <div className="rounded-3xl bg-white p-12 text-center shadow-card ring-1 ring-line">
             <SearchX className="mx-auto h-10 w-10 text-ink-400" />
             <p className="mt-4 text-lg font-extrabold text-ink-900">No activity found</p>
             <p className="mt-1 text-sm text-ink-500">
-              We couldn't find any tasks for <span className="font-mono font-semibold">{q}</span>. Check the UPI ID and try again.
+              We couldn't find any tasks for <span className="font-mono font-semibold">{q}</span>. Check the account or mobile number and try again.
             </p>
           </div>
         )}
@@ -126,7 +119,8 @@ export default function Tracking() {
                   </div>
                   <div className="flex items-center justify-between gap-6 sm:justify-end">
                     <div className="text-left sm:text-right">
-                      {r.status ? <StatusBadge status={r.status} /> : <StatusBadge status="pending" label="Not completed yet" />}
+                      {r.status ? <StatusBadge status={r.status} label={r.status === 'approved' ? 'Conversion approved' : undefined} /> : <StatusBadge status="pending" label="Clicked — awaiting conversion" />}
+                      {r.cashbackStatus && <p className="mt-1 text-xs font-semibold text-ink-600">Cashback: {r.cashbackStatus}{r.cashbackAmount ? ` · ${formatCurrency(r.cashbackAmount)}` : ''}</p>}
                       {r.conversionTime && <p className="mt-1 text-[11px] text-ink-400">Completed {formatDateTime(r.conversionTime)}</p>}
                     </div>
                     <p className="w-24 text-right text-lg font-extrabold text-ink-900 tabular-nums">{r.payout != null ? formatCurrency(r.payout) : '—'}</p>
@@ -140,9 +134,9 @@ export default function Tracking() {
         {!q && !loading && (
           <div className="grid gap-4 sm:grid-cols-3">
             {[
-              ['1', 'Use the same UPI', 'Enter exactly the UPI ID you typed on the offer page.'],
+              ['1', 'Use your account or mobile', 'Enter the bank account number or mobile number you entered on the offer page.'],
               ['2', 'See every task', 'Each offer you started appears with the time you started it.'],
-              ['3', 'Check the status', 'Approved tasks show the payout recorded for them.'],
+              ['3', 'Check the status', 'Approved tasks show the conversion payout recorded for them.'],
             ].map(([n, t, d]) => (
               <div key={n} className="rounded-2xl bg-white p-5 shadow-card ring-1 ring-line">
                 <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm font-extrabold text-white">{n}</span>

@@ -8,7 +8,7 @@ import { Alert, Button, Card, CardHeader, Field, Input, PageHeader, Textarea } f
 import { cn, errorMessage } from '../../utils/format';
 
 const FAQS = [
-  { q: 'How do I track my conversions?', a: 'Open Reports for click-level data or Conversions for every credited conversion, including the UPI, referrer and mobile captured on the click.' },
+  { q: 'How do I track my conversions?', a: 'Open Reports for click-level data or Conversions for every credited conversion, including the bank account identifier, referrer and mobile captured on the click. Public tracking accepts your account number or mobile.' },
   { q: 'When do I get paid?', a: 'Approved conversions credit your wallet immediately. Request a withdrawal from the Wallet page once you pass the minimum payout; our team reviews and processes it.' },
   { q: 'How do I get access to an offer?', a: 'Open the offer in the marketplace and click Request access. Some offers approve instantly, others are reviewed by an admin.' },
   { q: 'Why was my withdrawal rejected?', a: 'Check the note on the invoice. Rejected withdrawals are refunded to your wallet automatically, so you can correct the details and request again.' },
